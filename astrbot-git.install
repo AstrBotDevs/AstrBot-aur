@@ -1,0 +1,39 @@
+pre_install() {
+
+    if [ -f "$HOME/.local/bin/astrbot" ] || [ -d "$HOME/.local/share/uv/tools/astrbot" ]; then
+        echo ""
+        echo "============== ❌ 您已使用uv安装了astrbot =============="
+        echo "检测到您之前已通过 'uv tool install' 安装过 AstrBot。"
+        echo "这会导致与 AUR 版本的命令路径冲突。"
+        echo ""
+        echo "请先手动卸载，备份数据后再重试安装："
+        echo "执行命令：uv tool uninstall astrbot"
+        echo "=============================================="
+        echo "数据迁移指南"
+        echo "将你当前的数据目录（data目录）移动至：～/.local/share/astrbot/data"
+        return 1
+    fi
+}
+
+post_install() {
+    echo "-------------------------------------------------------------------"
+运行提示："
+    echo "   1. 首次启动会自动通过 'uv' 下载依赖，请保持网络畅通。"
+    echo "   2. 默认 Python 版本已锁定为 3.13 以保证兼容性。"
+径说明："
+    echo "   - 运行环境: ~/.cache/astrbot (包含虚拟环境和依赖)"
+    echo "   - 数据目录: ~/.local/share/astrbot (数据库、插件、日志)"
+    echo "-------------------------------------------------------------------"
+}
+
+post_upgrade() {
+    echo ">>> AstrBot 已更新。如果遇到运行错误，请尝试清理缓存："
+    echo ">>> rm -rf ~/.cache/astrbot"
+}
+
+post_remove() {
+    echo "-------------------------------------------------------------------"
+    echo "⚠️  注意：用户生成的数据和缓存并未删除，若要彻底清理，请执行："
+    echo "   rm -rf ~/.cache/astrbot ~/.local/share/astrbot"
+    echo "-------------------------------------------------------------------"
+}

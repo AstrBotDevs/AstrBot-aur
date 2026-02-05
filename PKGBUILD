@@ -2,34 +2,55 @@
 pkgname=astrbot-git
 _pkgname=astrbot
 pkgver=4.14.4.r2.g912e40e7
-pkgrel=1
-pkgdesc="Agentic IM Chatbot infrastructure that integrates lots of IM platforms, LLMs, plugins and AI features."
+pkgrel=15
+pkgdesc="Agentic IM Chatbot infrastructure with uv-managed dependencies. Your clawdbot alternative."
 arch=('any')
 url="https://github.com/AstrBotDevs/AstrBot"
 license=('AGPL-3.0-only')
-depends=('python')
-makedepends=('git' 'python-build' 'python-installer' 'python-hatchling')
+depends=('python' 'uv')
+makedepends=('git')
 provides=("${_pkgname}")
 conflicts=("${_pkgname}")
 source=("${pkgname}::git+${url}.git")
 sha256sums=('SKIP')
+install=astrbot-git.install
 
 pkgver() {
     cd "$pkgname"
-    # 例如：0.1.0.r10.g1234567
     git describe --long --tags | sed 's/\([^-]*-g\)/r\1/;s/-/./g' | sed 's/^v//g'
-}
-
-build() {
-    cd "$pkgname"
-    python -m build --wheel --no-isolation
 }
 
 package() {
     cd "$pkgname"
-    # 将编译好的 wheel 安装到 $pkgdir 目录下
-    python -m installer --destdir="$pkgdir" dist/*.whl
+    local _app_dir="/opt/$_pkgname"
 
-    # 安装许可证
+    mkdir -p "$pkgdir$_app_dir"
+    cp -r astrbot pyproject.toml LICENSE README.md "$pkgdir$_app_dir/"
+
+    mkdir -p "$pkgdir/usr/bin"
+    cat >"$pkgdir/usr/bin/astrbot" <<'EOF'
+#!/bin/sh
+DATA_ROOT="$HOME/.local/share/astrbot"
+ENV_DIR="$HOME/.cache/astrbot"
+APP_SOURCE="/opt/astrbot"
+
+mkdir -p "$DATA_ROOT/data"
+mkdir -p "$ENV_DIR"
+
+rm -rf "$ENV_DIR/pyproject.toml" "$ENV_DIR/astrbot" "$ENV_DIR/README.md" "$ENV_DIR/data"
+
+ln -sf "$APP_SOURCE/pyproject.toml" "$ENV_DIR/pyproject.toml"
+ln -sf "$APP_SOURCE/astrbot"        "$ENV_DIR/astrbot"
+ln -sf "$APP_SOURCE/README.md"      "$ENV_DIR/README.md"
+ln -sfn "$DATA_ROOT/data"           "$ENV_DIR/data"
+
+export UV_PROJECT_ENVIRONMENT="$ENV_DIR/venv"
+export UV_CACHE_DIR="$ENV_DIR/uv_cache"
+
+cd "$ENV_DIR" && uv run --python 3.13 astrbot "$@"
+EOF
+
+    chmod +x "$pkgdir/usr/bin/astrbot"
+
     install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }
