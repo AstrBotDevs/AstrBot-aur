@@ -1,0 +1,17 @@
+pkgbase = astrbot-git
+	pkgdesc = Agentic IM Chatbot infrastructure that integrates lots of IM platforms, LLMs, plugins and AI features.
+	pkgver = 4.14.4.r2.g912e40e7
+	pkgrel = 1
+	url = https://github.com/AstrBotDevs/AstrBot
+	arch = any
+	license = AGPL-3.0-only
+	makedepends = git
+	makedepends = python-build
+	makedepends = python-hatchling
+	depends = python
+	provides = astrbot
+	conflicts = astrbot
+	source = astrbot-git::git+https://github.com/AstrBotDevs/AstrBot.git
+	sha256sums = SKIP
+
+pkgname = astrbot-git
