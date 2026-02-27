@@ -1,8 +1,8 @@
 # Maintainer: lightjunction <lightjunction.me@gmail.com>
 pkgname=astrbot-git
 _pkgname=astrbot
-pkgver=4.14.4.r2.g912e40e7
-pkgrel=15
+pkgver=4.18.3.r2.g63ff234f1
+pkgrel=2
 pkgdesc="Agentic IM Chatbot infrastructure with uv-managed dependencies. Your clawdbot alternative."
 arch=('any')
 url="https://github.com/AstrBotDevs/AstrBot"
@@ -52,5 +52,6 @@ EOF
 
     chmod +x "$pkgdir/usr/bin/astrbot"
 
+    install -Dm644 "scripts/astrbot.service" "$pkgdir/usr/lib/systemd/user/astrbot.service"
     install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

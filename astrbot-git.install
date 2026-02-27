@@ -17,12 +17,21 @@ pre_install() {
 
 post_install() {
     echo "-------------------------------------------------------------------"
-运行提示："
+    echo "运行提示："
     echo "   1. 首次启动会自动通过 'uv' 下载依赖，请保持网络畅通。"
     echo "   2. 默认 Python 版本已锁定为 3.13 以保证兼容性。"
-径说明："
+    echo "路径说明："
     echo "   - 运行环境: ~/.cache/astrbot (包含虚拟环境和依赖)"
     echo "   - 数据目录: ~/.local/share/astrbot (数据库、插件、日志)"
+    echo "   - systemd服务（用户级）：/usr/lib/systemd/user/astrbot.service"
+    echo "启动systemd服务"
+    echo "systemctl --user daemon-reload # 重载更新"
+    echo "systemctl --user start astrbot.service # 立即启动"
+    echo "systemctl --user enable astrbot.service # 设置开机自启"
+    echo "systemctl --user enable --now astrbot.service # 启动并设置开机自启"
+    echo "systemctl --user restart astrbot.service # 重启服务"
+    echo "systemctl --user status astrbot.service # 查看服务状态"
+
     echo "-------------------------------------------------------------------"
 }
 
