@@ -2,7 +2,7 @@
 pkgname=astrbot-git
 _pkgname=astrbot
 pkgver=4.18.3.r2.g63ff234f1
-pkgrel=2
+pkgrel=1
 pkgdesc="Agentic IM Chatbot infrastructure with uv-managed dependencies. Your clawdbot alternative."
 arch=('any')
 url="https://github.com/AstrBotDevs/AstrBot"
@@ -25,7 +25,7 @@ package() {
     local _app_dir="/opt/$_pkgname"
 
     mkdir -p "$pkgdir$_app_dir"
-    cp -r astrbot pyproject.toml LICENSE README.md "$pkgdir$_app_dir/"
+    cp -r astrbot scripts pyproject.toml LICENSE README.md "$pkgdir$_app_dir/"
 
     mkdir -p "$pkgdir/usr/bin"
     cat >"$pkgdir/usr/bin/astrbot" <<'EOF'
@@ -37,10 +37,11 @@ APP_SOURCE="/opt/astrbot"
 mkdir -p "$DATA_ROOT/data"
 mkdir -p "$ENV_DIR"
 
-rm -rf "$ENV_DIR/pyproject.toml" "$ENV_DIR/astrbot" "$ENV_DIR/README.md" "$ENV_DIR/data"
+rm -rf "$ENV_DIR/pyproject.toml" "$ENV_DIR/astrbot" "$ENV_DIR/scripts" "$ENV_DIR/README.md" "$ENV_DIR/data"
 
 ln -sf "$APP_SOURCE/pyproject.toml" "$ENV_DIR/pyproject.toml"
 ln -sf "$APP_SOURCE/astrbot"        "$ENV_DIR/astrbot"
+ln -sf "$APP_SOURCE/scripts"        "$ENV_DIR/scripts"
 ln -sf "$APP_SOURCE/README.md"      "$ENV_DIR/README.md"
 ln -sfn "$DATA_ROOT/data"           "$ENV_DIR/data"
 
