@@ -1,6 +1,6 @@
 pkgbase = astrbot-git
 	pkgdesc = Agentic IM Chatbot infrastructure with uv-managed dependencies. Your clawdbot alternative.
-	pkgver = 4.18.3.r2.g63ff234f1
+	pkgver = 4.20.0.r1.ga8ff2b3d9
 	pkgrel = 1
 	url = https://github.com/AstrBotDevs/AstrBot
 	install = astrbot-git.install

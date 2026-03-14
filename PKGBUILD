@@ -1,7 +1,7 @@
 # Maintainer: lightjunction <lightjunction.me@gmail.com>
 pkgname=astrbot-git
 _pkgname=astrbot
-pkgver=4.18.3.r2.g63ff234f1
+pkgver=4.20.0.r1.ga8ff2b3d9
 pkgrel=1
 pkgdesc="Agentic IM Chatbot infrastructure with uv-managed dependencies. Your clawdbot alternative."
 arch=('any')

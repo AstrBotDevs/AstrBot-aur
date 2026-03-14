@@ -11,3 +11,5 @@
 /*.egg-info/
 
 astrbot-git
+data
+*.lock
