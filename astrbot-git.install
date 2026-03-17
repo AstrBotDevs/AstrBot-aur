@@ -10,7 +10,7 @@ pre_install() {
         echo "执行命令：uv tool uninstall astrbot"
         echo "=============================================="
         echo "数据迁移指南"
-        echo "将你当前的数据目录（data目录）移动至：～/.local/share/astrbot/data"
+        echo "将你当前的数据目录（data目录）移动至：～/.astrbot/data"
         return 1
     fi
 }
@@ -22,7 +22,7 @@ post_install() {
     echo "   2. 默认 Python 版本已锁定为 3.13 以保证兼容性。"
     echo "路径说明："
     echo "   - 运行环境: ~/.cache/astrbot (包含虚拟环境和依赖)"
-    echo "   - 数据目录: ~/.local/share/astrbot (数据库、插件、日志)"
+    echo "   - 数据目录: ~/.astrbot (数据库、插件、日志)"
     echo "   - systemd服务（用户级）：/usr/lib/systemd/user/astrbot.service"
     echo "启动systemd服务"
     echo "systemctl --user daemon-reload # 重载更新"
@@ -43,6 +43,6 @@ post_upgrade() {
 post_remove() {
     echo "-------------------------------------------------------------------"
     echo "⚠️  注意：用户生成的数据和缓存并未删除，若要彻底清理，请执行："
-    echo "   rm -rf ~/.cache/astrbot ~/.local/share/astrbot"
+    echo "   rm -rf ~/.cache/astrbot ~/.astrbot"
     echo "-------------------------------------------------------------------"
 }
