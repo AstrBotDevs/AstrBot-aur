@@ -2,7 +2,7 @@
 pkgname=astrbot-git
 _pkgname=astrbot
 pkgver=4.20.1.r100.g6dc13b880
-pkgrel=1
+pkgrel=2
 pkgdesc="Agentic IM Chatbot infrastructure with uv-managed dependencies. Your clawdbot alternative."
 arch=('any')
 url="https://github.com/AstrBotDevs/AstrBot"
