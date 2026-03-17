@@ -40,6 +40,7 @@ post_upgrade() {
     echo ">>> rm -rf ~/.cache/astrbot"
     echo ">>> 注意！数据目录已由～/.local/share/astrbot 迁移至 ~/.astrbot"
     echo ">>> 注意！现在安装的astrbot为dev分支，此分支比主分支包含更多修复，更多新特性，如有问题，及时反馈！"
+    echo ">>> 注意！使用 `paru -Syu --devel`清理缓存，更新代码 "
 }
 
 post_remove() {
