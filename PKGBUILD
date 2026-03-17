@@ -30,7 +30,7 @@ package() {
     mkdir -p "$pkgdir/usr/bin"
     cat >"$pkgdir/usr/bin/astrbot" <<'EOF'
 #!/bin/sh
-DATA_ROOT="$HOME/.local/share/astrbot"
+DATA_ROOT="$HOME/.astrbot"
 ENV_DIR="$HOME/.cache/astrbot"
 APP_SOURCE="/opt/astrbot"
 
@@ -48,7 +48,7 @@ ln -sfn "$DATA_ROOT/data"           "$ENV_DIR/data"
 export UV_PROJECT_ENVIRONMENT="$ENV_DIR/venv"
 export UV_CACHE_DIR="$ENV_DIR/uv_cache"
 
-cd "$ENV_DIR" && uv run --python 3.13 astrbot "$@"
+cd "$ENV_DIR" && uv run --python 3.12 astrbot "$@"
 EOF
 
     chmod +x "$pkgdir/usr/bin/astrbot"
