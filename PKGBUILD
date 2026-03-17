@@ -1,7 +1,7 @@
 # Maintainer: lightjunction <lightjunction.me@gmail.com>
 pkgname=astrbot-git
 _pkgname=astrbot
-pkgver=4.20.1.r10.gebd232ec8
+pkgver=4.20.1.r98.g4c0fb31e7
 pkgrel=1
 pkgdesc="Agentic IM Chatbot infrastructure with uv-managed dependencies. Your clawdbot alternative."
 arch=('any')
@@ -11,7 +11,7 @@ depends=('python' 'uv')
 makedepends=('git')
 provides=("${_pkgname}")
 conflicts=("${_pkgname}")
-source=("${pkgname}::git+${url}.git")
+source=("${pkgname}::git+${url}.git#branch=dev")
 sha256sums=('SKIP')
 install=astrbot-git.install
 
