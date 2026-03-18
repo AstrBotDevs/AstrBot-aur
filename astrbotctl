@@ -1,0 +1,141 @@
+#!/bin/sh
+set -e
+
+# Constants
+ASTRBOT_ROOT="/var/lib/astrbot"
+CONFIG_DIR="/etc/astrbot"
+APP_DIR="/opt/astrbot"
+CACHE_DIR="/var/cache/astrbot"
+
+cmd="$1"
+instance="$2"
+
+# Helpers
+require_root() {
+    if [ "$(id -u)" -ne 0 ]; then
+        echo "❌ Error: This command requires root privileges (sudo)."
+        exit 1
+    fi
+}
+
+require_instance() {
+    if [ -z "$instance" ]; then
+        echo "Usage: astrbotctl <command> <instance_name>"
+        exit 1
+    fi
+}
+
+case "$cmd" in
+init)
+    require_root
+    require_instance
+
+    DATA_DIR="$ASTRBOT_ROOT/$instance"
+    CONF_FILE="$CONFIG_DIR/$instance.conf"
+
+    if [ -d "$DATA_DIR" ]; then
+        echo "⚠️  Instance data directory already exists: $DATA_DIR"
+        exit 1
+    fi
+
+    echo ">>> Initializing instance: $instance"
+
+    # Create data directory with correct ownership (astrbot user)
+    # We assume the 'astrbot' user exists (created by .install script)
+    install -dm755 -o astrbot -g astrbot "$DATA_DIR"
+
+    # Simple port allocation logic
+    # Start from 3000, check if port is in use via ss (part of iproute2)
+    PORT=3000
+    while ss -lntH | awk '{print $4}' | grep -q ":$PORT$"; do
+        PORT=$((PORT + 1))
+    done
+
+    # Write config file
+    echo "# AstrBot Instance Configuration: $instance" >"$CONF_FILE"
+    echo "PORT=$PORT" >>"$CONF_FILE"
+
+    # Secure the config file
+    chmod 644 "$CONF_FILE"
+
+    echo "✅ Instance initialized."
+    echo "   Data Directory: $DATA_DIR"
+    echo "   Configuration:  $CONF_FILE"
+    echo "   Port:           $PORT"
+    echo ""
+    echo "To start the instance:"
+    echo "   systemctl start astrbot@$instance"
+    ;;
+
+run)
+    # This is typically called by systemd (User=astrbot)
+    # It can also be called manually for debugging
+    require_instance
+
+    DATA_DIR="$ASTRBOT_ROOT/$instance"
+    CONF_FILE="$CONFIG_DIR/$instance.conf"
+
+    if [ ! -d "$DATA_DIR" ]; then
+        echo "❌ Error: Instance directory $DATA_DIR does not exist."
+        echo "   Run 'sudo astrbotctl init $instance' first."
+        exit 1
+    fi
+
+    # Load configuration
+    # If run via systemd EnvironmentFile, variables might already be set,
+    # but sourcing again ensures consistency if run manually.
+    if [ -f "$CONF_FILE" ]; then
+        # shellcheck disable=SC1090
+        . "$CONF_FILE"
+    fi
+
+    # Set up UV environment
+    export UV_CACHE_DIR="$CACHE_DIR/uv"
+    export UV_PROJECT_ENVIRONMENT="$CACHE_DIR/venv-$instance"
+
+    # Change to app directory to find pyproject.toml
+    cd "$APP_DIR"
+
+    echo ">>> Starting AstrBot instance: $instance"
+    echo ">>> Port: ${PORT:-default}"
+
+    # Execute AstrBot
+    # --frozen ensures uv doesn't try to write to uv.lock in /opt/astrbot (which is read-only)
+    # We assume astrbot accepts --data-dir and --port arguments.
+    exec uv run --frozen --python 3.12 astrbot \
+        --data-dir "$DATA_DIR" \
+        ${PORT:+--port $PORT}
+    ;;
+
+start | stop | restart | enable | disable | status)
+    require_instance
+    # Pass through to systemctl
+    # status doesn't need root (usually), others do (via PolicyKit)
+    systemctl "$cmd" "astrbot@$instance"
+    ;;
+
+list)
+    echo "=== AstrBot Instances ==="
+    if [ -d "$ASTRBOT_ROOT" ]; then
+        # List subdirectories in /var/lib/astrbot
+        ls -1 "$ASTRBOT_ROOT" 2>/dev/null || echo "(No instances found)"
+    else
+        echo "(No instances found)"
+    fi
+    ;;
+
+*)
+    echo "AstrBot Control Tool"
+    echo ""
+    echo "Usage:"
+    echo "  sudo astrbotctl init <name>     # Create a new instance"
+    echo "  astrbotctl start <name>         # Start via systemd"
+    echo "  astrbotctl stop <name>          # Stop via systemd"
+    echo "  astrbotctl status <name>        # Check status"
+    echo "  astrbotctl list                 # List instances"
+    echo ""
+    echo "Debugging:"
+    echo "  astrbotctl run <name>           # Run in foreground"
+    exit 1
+    ;;
+esac
