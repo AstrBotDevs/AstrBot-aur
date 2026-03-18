@@ -79,6 +79,21 @@ run_astrbot() {
     export UV_PYTHON_INSTALL_DIR="$CACHE_DIR/python"
     export ASTRBOT_SYSTEMD=1
 
+    # When invoked as root, perform AstrBot/uv operations as the service user.
+    # This keeps the venv and uv-managed Python runtime compatible with systemd.
+    if [ "$(id -u)" -eq 0 ] && [ -z "$ASTRBOT_PRIVDROP_DONE" ] && id astrbot >/dev/null 2>&1; then
+        export ASTRBOT_PRIVDROP_DONE=1
+        exec runuser -u astrbot -- env \
+            PATH="$PATH" \
+            UV_CACHE_DIR="$UV_CACHE_DIR" \
+            UV_PROJECT_ENVIRONMENT="$UV_PROJECT_ENVIRONMENT" \
+            UV_PYTHON_INSTALL_DIR="$UV_PYTHON_INSTALL_DIR" \
+            ASTRBOT_SYSTEMD="$ASTRBOT_SYSTEMD" \
+            ASTRBOT_ROOT="${ASTRBOT_ROOT:-}" \
+            ASTRBOT_PRIVDROP_DONE="$ASTRBOT_PRIVDROP_DONE" \
+            "$0" __run_astrbot "$instance" "$@"
+    fi
+
     VENV_PYTHON="$UV_PROJECT_ENVIRONMENT/bin/python"
     VENV_ASTRBOT="$UV_PROJECT_ENVIRONMENT/bin/astrbot"
 
@@ -98,12 +113,6 @@ run_astrbot() {
         uv pip install "$APP_DIR"
     fi
 
-    # The service runs as astrbot, but init/debug commands may be invoked as root.
-    # Keep the shared per-instance venv executable by the service user.
-    if [ "$(id -u)" -eq 0 ] && id astrbot >/dev/null 2>&1; then
-        chown -R astrbot:astrbot "$UV_PROJECT_ENVIRONMENT"
-    fi
-
     # Export ASTRBOT_ROOT if set (usually by run/cli commands)
     if [ -n "$ASTRBOT_ROOT" ]; then
         export ASTRBOT_ROOT
@@ -119,6 +128,12 @@ run_astrbot() {
 }
 
 case "$cmd" in
+__run_astrbot)
+    require_instance
+    shift 2
+    run_astrbot "$@"
+    ;;
+
 init)
     shift
     instance=""
