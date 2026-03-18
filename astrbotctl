@@ -31,6 +31,17 @@ run_astrbot() {
     export UV_PROJECT_ENVIRONMENT="$CACHE_DIR/venv-$instance"
     export ASTRBOT_SYSTEMD=1
 
+    # Ensure environment is initialized (because --no-sync skips installation)
+    if [ ! -x "$UV_PROJECT_ENVIRONMENT/bin/astrbot" ]; then
+        echo ">>> Initializing virtual environment..."
+        # Create venv if missing
+        if [ ! -d "$UV_PROJECT_ENVIRONMENT" ]; then
+            uv venv "$UV_PROJECT_ENVIRONMENT" --python 3.12
+        fi
+        # Install astrbot package
+        uv pip install --python "$UV_PROJECT_ENVIRONMENT" "$APP_DIR"
+    fi
+
     # Export ASTRBOT_ROOT if set (usually by run/cli commands)
     if [ -n "$ASTRBOT_ROOT" ]; then
         export ASTRBOT_ROOT
@@ -44,7 +55,7 @@ run_astrbot() {
     # Execute AstrBot
     # --project points to the source code location
     # --no-sync allows runtime modifications (plugins) without lockfile sync issues
-    exec uv run --project "$APP_DIR" --no-sync --python 3.12 astrbot "$@"
+    exec uv run --project "$APP_DIR" --no-sync astrbot "$@"
 }
 
 case "$cmd" in
@@ -195,6 +206,52 @@ cp)
     echo "   systemctl start astrbot@$DEST_INSTANCE"
     ;;
 
+rm)
+    require_root
+    require_instance
+
+    ASTRBOT_ROOT="$SYSTEM_ROOT/$instance"
+    CONF_FILE="$CONFIG_DIR/$instance.conf"
+    VENV_DIR="$CACHE_DIR/venv-$instance"
+
+    # Check if instance exists (either data dir or config)
+    if [ ! -d "$ASTRBOT_ROOT" ] && [ ! -f "$CONF_FILE" ]; then
+        echo "❌ Error: Instance '$instance' does not exist."
+        exit 1
+    fi
+
+    echo ">>> Removing instance: $instance"
+
+    # Stop and disable service
+    if systemctl is-active --quiet "astrbot@$instance"; then
+        echo "    Stopping service..."
+        systemctl stop "astrbot@$instance"
+    fi
+
+    if systemctl is-enabled --quiet "astrbot@$instance" 2>/dev/null; then
+        echo "    Disabling service..."
+        systemctl disable "astrbot@$instance"
+    fi
+
+    # Remove files
+    if [ -d "$ASTRBOT_ROOT" ]; then
+        echo "    Removing data directory: $ASTRBOT_ROOT"
+        rm -rf "$ASTRBOT_ROOT"
+    fi
+
+    if [ -f "$CONF_FILE" ]; then
+        echo "    Removing configuration: $CONF_FILE"
+        rm -f "$CONF_FILE"
+    fi
+
+    if [ -d "$VENV_DIR" ]; then
+        echo "    Removing virtual environment: $VENV_DIR"
+        rm -rf "$VENV_DIR"
+    fi
+
+    echo "✅ Instance '$instance' removed."
+    ;;
+
 run)
     # This is typically called by systemd (User=astrbot)
     # It can also be called manually for debugging
@@ -271,6 +328,7 @@ list)
     echo "Usage:"
     echo "  sudo astrbotctl init <name>     # Create a new instance"
     echo "  sudo astrbotctl cp <src> <dst>  # Copy an instance"
+    echo "  sudo astrbotctl rm <name>       # Remove an instance"
     echo "  astrbotctl start <name>         # Start via systemd"
     echo "  astrbotctl stop <name>          # Stop via systemd"
     echo "  astrbotctl status <name>        # Check status"
