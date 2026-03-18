@@ -69,6 +69,7 @@ print_help() {
 load_instance_config() {
     CONF_FILE="$CONFIG_DIR/$instance.conf"
     ASTRBOT_ROOT="$SYSTEM_ROOT/$instance"
+    ASTRBOT_HOME="$ASTRBOT_ROOT/home"
 
     if [ -f "$CONF_FILE" ]; then
         # shellcheck disable=SC1090
@@ -77,15 +78,25 @@ load_instance_config() {
 }
 
 setup_runtime_env() {
-    # Keep AstrBot's mutable runtime paths inside the instance root when available.
-    # Some agent features derive paths from HOME/XDG and expect data/skills to exist.
-    runtime_root="${ASTRBOT_ROOT:-$SYSTEM_ROOT}"
+    runtime_root="${ASTRBOT_HOME:-$SYSTEM_ROOT/home}"
     runtime_cache="$runtime_root/.cache"
     runtime_config="$runtime_root/.config"
     runtime_data="$runtime_root/.local/share"
     runtime_state="$runtime_root/.local/state"
 
+    astrbot_data="$ASTRBOT_ROOT/data"
+    astrbot_data_config="$astrbot_data/config"
+    astrbot_data_plugins="$astrbot_data/plugins"
+    astrbot_data_temp="$astrbot_data/temp"
+    astrbot_data_skills="$astrbot_data/skills"
+    astrbot_data_site_packages="$astrbot_data/site-packages"
+    astrbot_date_knowledge_base="$astrbot_data/knowledge_base"
+    astrbot_data_backups="$astrbot_data/backups"
+    astrbot_data_t2i_templates="$astrbot_data/t2i_templates"
+    astrbot_data_webchat="$astrbot_data/webchat"
+
     export HOME="$runtime_root"
+    export ASTRBOT_ROOT="$ASTRBOT_ROOT"
     export XDG_CACHE_HOME="$runtime_cache"
     export XDG_CONFIG_HOME="$runtime_config"
     export XDG_DATA_HOME="$runtime_data"
@@ -98,10 +109,20 @@ setup_runtime_env() {
 
     mkdir -p \
         "$HOME" \
-        "$XDG_CACHE_HOME/astrbot/data/skills" \
         "$XDG_CONFIG_HOME" \
         "$XDG_DATA_HOME" \
-        "$XDG_STATE_HOME"
+        "$XDG_STATE_HOME" \
+        "$astrbot_data" \
+        "$astrbot_data_config" \
+        "$astrbot_data_plugins" \
+        "$astrbot_data_temp" \
+        "$astrbot_data_skills" \
+        "$astrbot_data_site_packages" \
+        "$astrbot_date_knowledge_base" \
+        "$astrbot_data_backups" \
+        "$astrbot_data_t2i_templates" \
+        "$astrbot_data_webchat"
+
 }
 
 run_astrbot_env_cmd() {
@@ -301,10 +322,7 @@ init)
     # Create data directory with correct ownership (astrbot user)
     # We assume the 'astrbot' user exists (created by .install script)
     install -dm755 -o astrbot -g astrbot "$ASTRBOT_ROOT"
-    install -dm755 -o astrbot -g astrbot "$ASTRBOT_ROOT/.cache/astrbot/data/skills"
-    install -dm755 -o astrbot -g astrbot "$ASTRBOT_ROOT/.config"
-    install -dm755 -o astrbot -g astrbot "$ASTRBOT_ROOT/.local/share"
-    install -dm755 -o astrbot -g astrbot "$ASTRBOT_ROOT/.local/state"
+    install -dm755 -o astrbot -g astrbot "$CACHE_DIR/venv-$instance"
 
     # Intelligent port allocation logic
     # 1. Collect ports used in existing config files
