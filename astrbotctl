@@ -73,17 +73,31 @@ load_instance_config() {
 }
 
 run_astrbot() {
-    # Set up UV environment
-    export HOME="$SYSTEM_ROOT"
-    export XDG_CACHE_HOME="/var/cache"
-    export XDG_CONFIG_HOME="/etc"
-    export XDG_DATA_HOME="/var/lib"
-    export XDG_STATE_HOME="/var/lib"
+    # Keep AstrBot's mutable runtime paths inside the instance root when available.
+    # Some agent features derive paths from HOME/XDG and expect data/skills to exist.
+    local runtime_root="${ASTRBOT_ROOT:-$SYSTEM_ROOT}"
+    local runtime_cache="$runtime_root/.cache"
+    local runtime_config="$runtime_root/.config"
+    local runtime_data="$runtime_root/.local/share"
+    local runtime_state="$runtime_root/.local/state"
+
+    export HOME="$runtime_root"
+    export XDG_CACHE_HOME="$runtime_cache"
+    export XDG_CONFIG_HOME="$runtime_config"
+    export XDG_DATA_HOME="$runtime_data"
+    export XDG_STATE_HOME="$runtime_state"
     export UV_CACHE_DIR="$CACHE_DIR/uv"
     export UV_PROJECT_ENVIRONMENT="$CACHE_DIR/venv-$instance"
     export UV_PYTHON_INSTALL_DIR="$CACHE_DIR/python"
     export ASTRBOT_SYSTEMD=1
     export ASTRBOT_DESKTOP_CLIENT=0
+
+    mkdir -p \
+        "$HOME" \
+        "$XDG_CACHE_HOME/astrbot/data/skills" \
+        "$XDG_CONFIG_HOME" \
+        "$XDG_DATA_HOME" \
+        "$XDG_STATE_HOME"
 
     # When invoked as root, perform AstrBot/uv operations as the service user.
     # This keeps the venv and uv-managed Python runtime compatible with systemd.
@@ -104,7 +118,7 @@ run_astrbot() {
             ASTRBOT_ROOT="${ASTRBOT_ROOT:-}" \
             ASTRBOT_PRIVDROP_DONE="$ASTRBOT_PRIVDROP_DONE" \
             sh -c 'cd "$1" && exec "$2" __run_astrbot "$3" "${@:4}"' sh \
-            "$SYSTEM_ROOT" "$0" "$instance" "$@"
+            "$runtime_root" "$0" "$instance" "$@"
     fi
 
     VENV_PYTHON="$UV_PROJECT_ENVIRONMENT/bin/python"
@@ -202,6 +216,10 @@ init)
     # Create data directory with correct ownership (astrbot user)
     # We assume the 'astrbot' user exists (created by .install script)
     install -dm755 -o astrbot -g astrbot "$ASTRBOT_ROOT"
+    install -dm755 -o astrbot -g astrbot "$ASTRBOT_ROOT/.cache/astrbot/data/skills"
+    install -dm755 -o astrbot -g astrbot "$ASTRBOT_ROOT/.config"
+    install -dm755 -o astrbot -g astrbot "$ASTRBOT_ROOT/.local/share"
+    install -dm755 -o astrbot -g astrbot "$ASTRBOT_ROOT/.local/state"
 
     # Intelligent port allocation logic
     # 1. Collect ports used in existing config files
