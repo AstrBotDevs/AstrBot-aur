@@ -161,6 +161,8 @@ EXTRA_ARGS=""
   sudo chown -R astrbot:astrbot /var/lib/astrbot
   sudo chown -R astrbot:astrbot /var/cache/astrbot/venv-<instance>
   ```
+  If the venv was created by `root`, also ensure its Python interpreter is not linked into `/root/.local/share/uv/...`.
+  Rebuild the venv after installing the fixed package if needed.
 
 - **Clean Cache**:
   If python dependencies break after an update:
@@ -348,6 +350,8 @@ EXTRA_ARGS=""
   sudo chown -R astrbot:astrbot /var/lib/astrbot
   sudo chown -R astrbot:astrbot /var/cache/astrbot/venv-<instance>
   ```
+  如果 venv 是由 `root` 创建的，还要确认其中的 Python 解释器没有链接到 `/root/.local/share/uv/...`。
+  安装修复后的包后，必要时重建该实例的 venv。
 
 - **清理缓存**:
   如果更新后 Python 依赖出现问题：
