@@ -97,6 +97,12 @@ run_astrbot() {
         uv pip install "$APP_DIR"
     fi
 
+    # The service runs as astrbot, but init/debug commands may be invoked as root.
+    # Keep the shared per-instance venv executable by the service user.
+    if [ "$(id -u)" -eq 0 ] && id astrbot >/dev/null 2>&1; then
+        chown -R astrbot:astrbot "$UV_PROJECT_ENVIRONMENT"
+    fi
+
     # Export ASTRBOT_ROOT if set (usually by run/cli commands)
     if [ -n "$ASTRBOT_ROOT" ]; then
         export ASTRBOT_ROOT
