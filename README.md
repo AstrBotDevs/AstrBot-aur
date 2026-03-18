@@ -156,9 +156,10 @@ EXTRA_ARGS=""
   ```
 
 - **Permission Errors**:
-  Ensure directories in `/var/lib/astrbot` are owned by `astrbot:astrbot`.
+  Ensure directories in `/var/lib/astrbot` and the instance venv under `/var/cache/astrbot` are owned by `astrbot:astrbot`.
   ```bash
   sudo chown -R astrbot:astrbot /var/lib/astrbot
+  sudo chown -R astrbot:astrbot /var/cache/astrbot/venv-<instance>
   ```
 
 - **Clean Cache**:
@@ -342,9 +343,10 @@ EXTRA_ARGS=""
   ```
 
 - **权限错误**:
-  确保 `/var/lib/astrbot` 中的目录归 `astrbot:astrbot` 所有。
+  确保 `/var/lib/astrbot` 以及 `/var/cache/astrbot/venv-<instance>` 归 `astrbot:astrbot` 所有。
   ```bash
   sudo chown -R astrbot:astrbot /var/lib/astrbot
+  sudo chown -R astrbot:astrbot /var/cache/astrbot/venv-<instance>
   ```
 
 - **清理缓存**:
