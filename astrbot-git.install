@@ -42,7 +42,7 @@ pre_install() {
             echo "   uv tool uninstall astrbot"
             echo ""
             echo "数据迁移："
-            echo "   将 data 目录移动至 ~/.local/share/astrbot/default"
+            echo "   将 data 目录移动至 /var/lib/astrbot/<实例名>"
             echo "============================================================="
             echo ""
             return 1
@@ -84,7 +84,7 @@ post_upgrade() {
     echo ">>> AstrBot 已更新，当前为非稳定版本，请注意备份数据（astrbot bk）。"
     echo ">>> 如遇问题可清理缓存： sudo rm -rf /var/cache/astrbot/*"
     echo ">>> 提示：使用 'astrbotctl cli <name> ...' 来管理插件或执行其他命令。"
-    echo ">>> 提示：使用 paru -Syu --devel 来更新开发版本，或者手动清理缓存。"
+    echo ">>> 提示：使用paru -S astrbot-git --devel 来更新开发版本，或者手动清理缓存。"
 }
 
 post_remove() {

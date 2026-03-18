@@ -10,7 +10,7 @@ Group=astrbot
 # Runtime Environment
 # UV_CACHE_DIR and UV_PROJECT_ENVIRONMENT are set by astrbotctl,
 # but can be overridden here if needed.
-# Environment="ASTRBOT_ROOT=/var/lib/astrbot"
+Environment="ASTRBOT_ROOT=/var/lib/astrbot/%i"
 
 # Instance Configuration
 EnvironmentFile=-/etc/astrbot/%i.conf
@@ -18,7 +18,7 @@ EnvironmentFile=-/etc/astrbot/%i.conf
 # Working directory
 # We set this to the instance data directory for safety,
 # though astrbotctl will cd to /opt/astrbot to find the project.
-WorkingDirectory=/var/lib/astrbot/%i
+WorkingDirectory=/var/lib/astrbot
 
 # Execution
 # The wrapper script handles env setup and cd to /opt/astrbot
@@ -31,7 +31,7 @@ RestartSec=3
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ProtectHome=true
+ProtectHome=read-only
 
 # Allow write access to necessary directories
 ReadWritePaths=/var/lib/astrbot /var/cache/astrbot
