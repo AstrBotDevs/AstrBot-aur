@@ -223,8 +223,12 @@ init)
         fi
     )
 
-    # Fix permissions for generated files
+    # Fix permissions for generated files and the per-instance venv.
+    # init is typically run as root, while the service runs as astrbot.
     chown -R astrbot:astrbot "$ASTRBOT_ROOT"
+    if [ -d "$CACHE_DIR/venv-$instance" ]; then
+        chown -R astrbot:astrbot "$CACHE_DIR/venv-$instance"
+    fi
 
     echo "✅ Instance initialized."
     echo "   Data Directory: $ASTRBOT_ROOT"
