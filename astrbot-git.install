@@ -1,51 +1,90 @@
-pre_install() {
+#!/bin/sh
 
-    if [ -f "$HOME/.local/bin/astrbot" ] || [ -d "$HOME/.local/share/uv/tools/astrbot" ]; then
-        echo ""
-        echo "============== ❌ 您已使用uv安装了astrbot =============="
-        echo "检测到您之前已通过 'uv tool install' 安装过 AstrBot。"
-        echo "这会导致与 AUR 版本的命令路径冲突。"
-        echo ""
-        echo "请先手动卸载，备份数据后再重试安装："
-        echo "执行命令：uv tool uninstall astrbot"
-        echo "=============================================="
-        echo "数据迁移指南"
-        echo "将你当前的数据目录（data目录）移动至：～/.astrbot/data"
-        return 1
+_ensure_environment() {
+    # 创建系统用户
+    if ! getent passwd astrbot >/dev/null; then
+        useradd -r -M -d /var/lib/astrbot -s /usr/bin/nologin -c "AstrBot Service User" astrbot
+    fi
+
+    # 创建并修正目录权限
+    # install -d 会创建目录如果不存在
+    install -dm755 -o astrbot -g astrbot /var/lib/astrbot
+    install -dm755 -o astrbot -g astrbot /var/cache/astrbot
+    install -dm755 -o root    -g root    /etc/astrbot
+
+    # 确保递归权限正确 (修复升级或手动修改后的权限)
+    # 使用 if 检查防止在极少数情况下目录未创建导致脚本报错
+    if [ -d "/var/lib/astrbot" ]; then
+        chown -R astrbot:astrbot /var/lib/astrbot
+    fi
+    if [ -d "/var/cache/astrbot" ]; then
+        chown -R astrbot:astrbot /var/cache/astrbot
+    fi
+
+    # /opt/astrbot 应当是 root:root，但在运行 uv 时可能需要读取
+    # 确保其它用户有 rx 权限
+    if [ -d "/opt/astrbot" ]; then
+        chmod -R o+rx /opt/astrbot
+    fi
+}
+
+pre_install() {
+    # ⚠️ 检查旧的 uv 安装
+    local user_home
+    user_home="$(getent passwd "$SUDO_USER" 2>/dev/null | cut -d: -f6)"
+
+    if [ -n "$user_home" ]; then
+        if [ -f "$user_home/.local/bin/astrbot" ] || \
+           [ -d "$user_home/.local/share/uv/tools/astrbot" ]; then
+            echo ""
+            echo "============== ❌ 检测到 uv tool 安装的 astrbot =============="
+            echo "请先卸载："
+            echo "   uv tool uninstall astrbot"
+            echo ""
+            echo "数据迁移："
+            echo "   将 data 目录移动至 ~/.local/share/astrbot/default"
+            echo "============================================================="
+            echo ""
+            return 1
+        fi
     fi
 }
 
 post_install() {
-    echo "-------------------------------------------------------------------"
-    echo "运行提示："
-    echo "   1. 首次启动会自动通过 'uv' 下载依赖，请保持网络畅通。"
-    echo "   2. 默认 Python 版本已锁定为 3.13 以保证兼容性。"
-    echo "路径说明："
-    echo "   - 运行环境: ~/.cache/astrbot (包含虚拟环境和依赖)"
-    echo "   - 数据目录: ~/.astrbot (数据库、插件、日志)"
-    echo "   - systemd服务（用户级）：/usr/lib/systemd/user/astrbot.service"
-    echo "启动systemd服务"
-    echo "systemctl --user daemon-reload # 重载更新"
-    echo "systemctl --user start astrbot.service # 立即启动"
-    echo "systemctl --user enable astrbot.service # 设置开机自启"
-    echo "systemctl --user enable --now astrbot.service # 启动并设置开机自启"
-    echo "systemctl --user restart astrbot.service # 重启服务"
-    echo "systemctl --user status astrbot.service # 查看服务状态"
+    _ensure_environment
+    systemctl daemon-reload
 
+    echo "-------------------------------------------------------------------"
+    echo "AstrBot 已安装（多实例支持，仅使用 astrbotctl）"
+    echo ""
+    echo "【创建实例】"
+    echo "  sudo astrbotctl init <实例名>"
+    echo ""
+    echo "【运行实例】"
+    echo "  sudo systemctl start astrbot@<实例名>"
+    echo "  sudo systemctl enable astrbot@<实例名>"
+    echo ""
+    echo "【管理实例】"
+    echo "  astrbotctl status <实例名>"
+    echo "  astrbotctl list"
+    echo ""
+    echo "实例数据目录： /var/lib/astrbot/<实例名>"
+    echo "实例配置文件： /etc/astrbot/<实例名>.conf"
     echo "-------------------------------------------------------------------"
 }
 
 post_upgrade() {
-    echo ">>> AstrBot 已更新。如果遇到运行错误，请尝试清理缓存："
-    echo ">>> rm -rf ~/.cache/astrbot"
-    echo ">>> 注意！数据目录已由～/.local/share/astrbot 迁移至 ~/.astrbot"
-    echo ">>> 注意！现在安装的astrbot为dev分支，此分支比主分支包含更多修复，更多新特性，如有问题，及时反馈！"
-    echo ">>> 注意！使用 `paru -Syu --devel`清理缓存，更新代码 "
+    _ensure_environment
+    systemctl daemon-reload
+
+    echo ">>> AstrBot 已更新"
+    echo ">>> 如遇问题可清理缓存： sudo rm -rf /var/cache/astrbot/*"
 }
 
 post_remove() {
     echo "-------------------------------------------------------------------"
-    echo "⚠️  注意：用户生成的数据和缓存并未删除，若要彻底清理，请执行："
-    echo "   rm -rf ~/.cache/astrbot ~/.astrbot"
+    echo "⚠️ 数据未删除，如需彻底清理："
+    echo "   sudo rm -rf /var/lib/astrbot /var/cache/astrbot /etc/astrbot"
+    echo "   sudo userdel astrbot"
     echo "-------------------------------------------------------------------"
 }
