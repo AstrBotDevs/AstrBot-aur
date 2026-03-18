@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 _ensure_environment() {
     # 创建系统用户
