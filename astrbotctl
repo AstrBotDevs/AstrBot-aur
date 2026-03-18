@@ -76,6 +76,7 @@ run_astrbot() {
     # Set up UV environment
     export UV_CACHE_DIR="$CACHE_DIR/uv"
     export UV_PROJECT_ENVIRONMENT="$CACHE_DIR/venv-$instance"
+    export UV_PYTHON_INSTALL_DIR="$CACHE_DIR/python"
     export ASTRBOT_SYSTEMD=1
 
     VENV_PYTHON="$UV_PROJECT_ENVIRONMENT/bin/python"
