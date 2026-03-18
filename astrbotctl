@@ -178,7 +178,7 @@ update_app_git_checkout() {
 
     echo ">>> Fetching latest AstrBot source from $UPSTREAM_URL ($UPSTREAM_BRANCH)"
     git -C "$APP_DIR" fetch --depth=1 origin "$UPSTREAM_BRANCH"
-    git -C "$APP_DIR" checkout -B "$UPSTREAM_BRANCH" FETCH_HEAD
+    git -C "$APP_DIR" checkout -f -B "$UPSTREAM_BRANCH" FETCH_HEAD
 }
 
 run_astrbot() {
