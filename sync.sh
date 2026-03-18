@@ -1,20 +1,45 @@
 #!/bin/bash
-set -e
 
-# Ensure AUR remote exists
-if ! git remote | grep -q "^aur$"; then
+set -euo pipefail
+
+BRANCH=$(git symbolic-ref --short HEAD)
+
+get_remote_url() {
+    git remote get-url "$1" 2>/dev/null || true
+}
+
+AUR_REMOTE=""
+GITHUB_REMOTE=""
+
+for remote in $(git remote); do
+    url=$(get_remote_url "$remote")
+    case "$url" in
+        *aur.archlinux.org*)
+            AUR_REMOTE="$remote"
+            ;;
+        *github.com*)
+            GITHUB_REMOTE="$remote"
+            ;;
+    esac
+done
+
+if [[ -z "$AUR_REMOTE" ]]; then
     echo "Adding AUR remote..."
     git remote add aur https://aur.archlinux.org/astrbot-git.git
+    AUR_REMOTE="aur"
 fi
 
-echo "Fetching from AUR..."
-git fetch aur
+echo "Fetching latest commits from AUR remote: $AUR_REMOTE"
+git fetch --prune "$AUR_REMOTE"
 
-echo "Merging AUR master into local master..."
-# Using --allow-unrelated-histories just in case initialization differed
-git merge aur/master --allow-unrelated-histories -m "Sync: Merge upstream changes from AUR"
+echo "Fast-forwarding local branch '$BRANCH' to AUR latest commit..."
+git pull --ff-only "$AUR_REMOTE" "$BRANCH"
 
-echo "Pushing to GitHub..."
-git push origin master
+if [[ -n "$GITHUB_REMOTE" ]]; then
+    echo "Pushing latest commit to GitHub remote: $GITHUB_REMOTE"
+    git push "$GITHUB_REMOTE" "$BRANCH"
+else
+    echo "No GitHub remote found, skipping mirror push."
+fi
 
 echo "Sync complete!"
