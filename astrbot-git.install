@@ -79,6 +79,7 @@ post_upgrade() {
 
     echo ">>> AstrBot 已更新"
     echo ">>> 如遇问题可清理缓存： sudo rm -rf /var/cache/astrbot/*"
+    echo ">>> 重要提示，原astrbot包装脚本已移除，请使用astrbotctl管理astrbot服务。"
 }
 
 post_remove() {
