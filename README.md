@@ -163,6 +163,7 @@ Contributions to the packaging scripts are welcome!
 
 - **Packaging Issues**: Please comment on the AUR page or submit issues to the maintainer.
 - **AstrBot Issues**: Please report bugs related to the bot functionality to the [upstream repository](https://github.com/AstrBotDevs/AstrBot/issues).
+- **Co-Maintainership**: Please apply at [AUR Co-maintainers](https://aur.archlinux.org/pkgbase/astrbot-git/comaintainers) and email `lightjunction.me@gmail.com` with your AUR username and details for review.
 
 </details>
 
@@ -329,5 +330,6 @@ EXTRA_ARGS=""
 
 - **打包问题**: 请在 AUR 页面评论或联系维护者。
 - **AstrBot 问题**: 关于机器人本身的功能问题，请反馈至 [上游仓库](https://github.com/AstrBotDevs/AstrBot/issues)。
+- **申请共同维护**: 请在 [AUR](https://aur.archlinux.org/pkgbase/astrbot-git/comaintainers) 上提交申请，并发送邮件至 `lightjunction.me@gmail.com`，附带您的 AUR 用户名及相关信息以供审核。
 
 </details>
