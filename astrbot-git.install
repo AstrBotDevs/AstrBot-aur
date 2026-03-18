@@ -48,6 +48,18 @@ pre_install() {
             return 1
         fi
     fi
+
+    # ⚠️ 检查 root 用户残留缓存 (防止权限混淆)
+    if [ -d "/root/.cache/astrbot" ]; then
+        echo ""
+        echo "============== ⚠️  检测到 root 用户的 astrbot 缓存 =============="
+        echo "发现目录: /root/.cache/astrbot"
+        echo "这通常意味着您之前尝试以 root 身份直接运行过 AstrBot。"
+        echo "为了避免权限问题和磁盘空间浪费，建议删除此目录："
+        echo "   sudo rm -rf /root/.cache/astrbot"
+        echo "============================================================="
+        echo ""
+    fi
 }
 
 post_install() {
