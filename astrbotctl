@@ -125,8 +125,11 @@ init)
 
     echo ">>> Bootstrapping AstrBot data..."
     (
-        run_astrbot init -b -y
+        run_astrbot init -y -b
     )
+
+    # Fix permissions for generated files
+    chown -R astrbot:astrbot "$ASTRBOT_ROOT"
 
     echo "✅ Instance initialized."
     echo "   Data Directory: $ASTRBOT_ROOT"
