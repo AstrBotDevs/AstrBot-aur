@@ -39,6 +39,8 @@ print_help() {
     echo "  astrbotctl password [options] <name>             # Change dashboard password"
     echo "  astrbotctl export [options] <name>               # Export instance backup"
     echo "  astrbotctl import [options] <name> <backup_file> # Import instance backup"
+    echo "  sudo astrbotctl git pull [--sync] [instance|--all]            # Pull latest app source"
+    echo "  sudo astrbotctl git pull --rebuild-venv [instance|--all]      # Pull and rebuild instance venv(s)"
     echo ""
     echo "Init options:"
     echo "  -f, --backup <file>  Initialize the instance from a backup archive"
@@ -72,14 +74,14 @@ load_instance_config() {
     fi
 }
 
-run_astrbot() {
+setup_runtime_env() {
     # Keep AstrBot's mutable runtime paths inside the instance root when available.
     # Some agent features derive paths from HOME/XDG and expect data/skills to exist.
-    local runtime_root="${ASTRBOT_ROOT:-$SYSTEM_ROOT}"
-    local runtime_cache="$runtime_root/.cache"
-    local runtime_config="$runtime_root/.config"
-    local runtime_data="$runtime_root/.local/share"
-    local runtime_state="$runtime_root/.local/state"
+    runtime_root="${ASTRBOT_ROOT:-$SYSTEM_ROOT}"
+    runtime_cache="$runtime_root/.cache"
+    runtime_config="$runtime_root/.config"
+    runtime_data="$runtime_root/.local/share"
+    runtime_state="$runtime_root/.local/state"
 
     export HOME="$runtime_root"
     export XDG_CACHE_HOME="$runtime_cache"
@@ -98,6 +100,60 @@ run_astrbot() {
         "$XDG_CONFIG_HOME" \
         "$XDG_DATA_HOME" \
         "$XDG_STATE_HOME"
+}
+
+run_astrbot_env_cmd() {
+    setup_runtime_env
+
+    if [ "$(id -u)" -eq 0 ] && [ -z "$ASTRBOT_PRIVDROP_DONE" ] && id astrbot >/dev/null 2>&1; then
+        runuser -u astrbot -- env \
+            PATH="$PATH" \
+            HOME="$HOME" \
+            XDG_CACHE_HOME="$XDG_CACHE_HOME" \
+            XDG_CONFIG_HOME="$XDG_CONFIG_HOME" \
+            XDG_DATA_HOME="$XDG_DATA_HOME" \
+            XDG_STATE_HOME="$XDG_STATE_HOME" \
+            UV_CACHE_DIR="$UV_CACHE_DIR" \
+            UV_PROJECT_ENVIRONMENT="$UV_PROJECT_ENVIRONMENT" \
+            UV_PYTHON_INSTALL_DIR="$UV_PYTHON_INSTALL_DIR" \
+            ASTRBOT_SYSTEMD="$ASTRBOT_SYSTEMD" \
+            ASTRBOT_DESKTOP_CLIENT="$ASTRBOT_DESKTOP_CLIENT" \
+            ASTRBOT_ROOT="${ASTRBOT_ROOT:-}" \
+            sh -c 'cd "$1" && shift && exec "$@"' sh \
+            "$runtime_root" "$@"
+    else
+        (
+            cd "$runtime_root"
+            exec "$@"
+        )
+    fi
+}
+
+ensure_instance_env_synced() {
+    setup_runtime_env
+
+    if [ ! -d "$UV_PROJECT_ENVIRONMENT" ]; then
+        echo ">>> Creating virtual environment for instance: $instance"
+        run_astrbot_env_cmd uv venv "$UV_PROJECT_ENVIRONMENT" --python 3.12
+    fi
+
+    echo ">>> Syncing Python environment for instance: $instance"
+    run_astrbot_env_cmd env \
+        VIRTUAL_ENV="$UV_PROJECT_ENVIRONMENT" \
+        PATH="$UV_PROJECT_ENVIRONMENT/bin:$PATH" \
+        uv pip install "$APP_DIR"
+}
+
+iter_instances() {
+    if [ ! -d "$SYSTEM_ROOT" ]; then
+        return 0
+    fi
+
+    find "$SYSTEM_ROOT" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort
+}
+
+run_astrbot() {
+    setup_runtime_env
 
     # When invoked as root, perform AstrBot/uv operations as the service user.
     # This keeps the venv and uv-managed Python runtime compatible with systemd.
@@ -685,6 +741,120 @@ list)
     else
         echo "(No instances found)"
     fi
+    ;;
+
+git)
+    require_root
+
+    if [ -z "$2" ] || [ "$2" = "-h" ] || [ "$2" = "--help" ]; then
+        echo "Usage: sudo astrbotctl git pull [--sync] [instance|--all]"
+        echo "       sudo astrbotctl git pull --rebuild-venv [instance|--all]"
+        exit 0
+    fi
+
+    case "$2" in
+    pull)
+        shift 2
+        GIT_SYNC=0
+        GIT_REBUILD_VENV=0
+        GIT_TARGET=""
+        GIT_ALL=0
+
+        while [ "$#" -gt 0 ]; do
+            case "$1" in
+            --sync)
+                GIT_SYNC=1
+                shift
+                ;;
+            --rebuild-venv)
+                GIT_SYNC=1
+                GIT_REBUILD_VENV=1
+                shift
+                ;;
+            --all)
+                GIT_ALL=1
+                shift
+                ;;
+            -h | --help)
+                echo "Usage: sudo astrbotctl git pull [--sync] [instance|--all]"
+                echo "       sudo astrbotctl git pull --rebuild-venv [instance|--all]"
+                exit 0
+                ;;
+            -*)
+                echo "❌ Error: Unknown option: $1"
+                exit 1
+                ;;
+            *)
+                if [ -n "$GIT_TARGET" ]; then
+                    echo "❌ Error: Unexpected extra argument: $1"
+                    exit 1
+                fi
+                GIT_TARGET="$1"
+                shift
+                ;;
+            esac
+        done
+
+        if [ "$GIT_ALL" -eq 1 ] && [ -n "$GIT_TARGET" ]; then
+            echo "❌ Error: Use either an instance name or --all, not both."
+            exit 1
+        fi
+
+        if [ "$GIT_REBUILD_VENV" -eq 1 ] && [ "$GIT_ALL" -eq 0 ] && [ -z "$GIT_TARGET" ]; then
+            echo "❌ Error: --rebuild-venv requires an instance name or --all."
+            exit 1
+        fi
+
+        if ! command -v git >/dev/null 2>&1; then
+            echo "❌ Error: git is not installed."
+            exit 1
+        fi
+
+        if [ ! -d "$APP_DIR/.git" ]; then
+            echo "❌ Error: $APP_DIR is not a git repository."
+            echo "   The installed package currently copies source files without VCS metadata."
+            echo "   Update via your AUR helper/makepkg workflow, or deploy a git checkout to $APP_DIR."
+            exit 1
+        fi
+
+        echo ">>> Pulling latest AstrBot source in $APP_DIR"
+        git -C "$APP_DIR" pull --ff-only
+
+        if [ "$GIT_SYNC" -eq 1 ]; then
+            if [ "$GIT_ALL" -eq 1 ] || [ -z "$GIT_TARGET" ]; then
+                TARGETS="$(iter_instances)"
+                if [ -z "$TARGETS" ]; then
+                    echo ">>> No AstrBot instances found. Skipping environment sync."
+                    exit 0
+                fi
+            else
+                TARGETS="$GIT_TARGET"
+            fi
+
+            for target_instance in $TARGETS; do
+                instance="$target_instance"
+                load_instance_config
+
+                if [ ! -d "$ASTRBOT_ROOT" ]; then
+                    echo "❌ Error: Instance directory $ASTRBOT_ROOT does not exist."
+                    exit 1
+                fi
+
+                if [ "$GIT_REBUILD_VENV" -eq 1 ]; then
+                    echo ">>> Rebuilding virtual environment for instance: $instance"
+                    rm -rf "$CACHE_DIR/venv-$instance"
+                fi
+
+                ensure_instance_env_synced
+            done
+        fi
+        ;;
+    *)
+        echo "❌ Error: Unknown git subcommand: $2"
+        echo "Usage: sudo astrbotctl git pull [--sync] [instance|--all]"
+        exit 1
+        ;;
+    esac
     ;;
 
 *)

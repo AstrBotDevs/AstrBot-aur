@@ -3,13 +3,13 @@
 pkgname=astrbot-git
 _pkgname=astrbot
 pkgver=4.20.1.r132.g9cbf25369
-pkgrel=32
+pkgrel=33
 pkgdesc="Agentic IM Chatbot infrastructure (multi-instance, astrbotctl only)"
 arch=('any')
 url="https://github.com/AstrBotDevs/AstrBot"
 license=('AGPL-3.0-only')
 
-depends=('python' 'uv' 'iproute2')
+depends=('python' 'uv' 'iproute2' 'git')
 makedepends=('git')
 
 provides=("$_pkgname")
