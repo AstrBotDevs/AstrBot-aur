@@ -6,6 +6,8 @@ SYSTEM_ROOT="/var/lib/astrbot"
 CONFIG_DIR="/etc/astrbot"
 APP_DIR="/opt/astrbot"
 CACHE_DIR="/var/cache/astrbot"
+UPSTREAM_URL="https://github.com/AstrBotDevs/AstrBot.git"
+UPSTREAM_BRANCH="dev"
 
 cmd="$1"
 instance="$2"
@@ -150,6 +152,33 @@ iter_instances() {
     fi
 
     find "$SYSTEM_ROOT" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort
+}
+
+ensure_app_git_repo() {
+    if [ -d "$APP_DIR/.git" ]; then
+        git -C "$APP_DIR" remote set-url origin "$UPSTREAM_URL"
+    else
+        echo ">>> Initializing Git repository in $APP_DIR"
+        install -d -m755 "$APP_DIR"
+        git -C "$APP_DIR" init
+        git -C "$APP_DIR" remote add origin "$UPSTREAM_URL"
+    fi
+
+    git -C "$APP_DIR" config core.sparseCheckout true
+
+    install -d -m755 "$APP_DIR/.git/info"
+    {
+        echo "/*"
+        echo "!/dashboard/"
+    } >"$APP_DIR/.git/info/sparse-checkout"
+}
+
+update_app_git_checkout() {
+    ensure_app_git_repo
+
+    echo ">>> Fetching latest AstrBot source from $UPSTREAM_URL ($UPSTREAM_BRANCH)"
+    git -C "$APP_DIR" fetch --depth=1 origin "$UPSTREAM_BRANCH"
+    git -C "$APP_DIR" checkout -B "$UPSTREAM_BRANCH" FETCH_HEAD
 }
 
 run_astrbot() {
@@ -810,15 +839,7 @@ git)
             exit 1
         fi
 
-        if [ ! -d "$APP_DIR/.git" ]; then
-            echo "❌ Error: $APP_DIR is not a git repository."
-            echo "   The installed package currently copies source files without VCS metadata."
-            echo "   Update via your AUR helper/makepkg workflow, or deploy a git checkout to $APP_DIR."
-            exit 1
-        fi
-
-        echo ">>> Pulling latest AstrBot source in $APP_DIR"
-        git -C "$APP_DIR" pull --ff-only
+        update_app_git_checkout
 
         if [ "$GIT_SYNC" -eq 1 ]; then
             if [ "$GIT_ALL" -eq 1 ] || [ -z "$GIT_TARGET" ]; then
