@@ -1,7 +1,7 @@
 pkgbase = astrbot-git
 	pkgdesc = Agentic IM Chatbot infrastructure (multi-instance, astrbotctl only)
 	pkgver = 4.20.1.r107.g294646048
-	pkgrel = 10
+	pkgrel = 11
 	url = https://github.com/AstrBotDevs/AstrBot
 	install = astrbot-git.install
 	arch = any
@@ -15,6 +15,8 @@ pkgbase = astrbot-git
 	source = astrbot-git::git+https://github.com/AstrBotDevs/AstrBot.git#branch=dev
 	source = astrbotctl
 	source = astrbot@.service
+	source = config.template
+	sha256sums = SKIP
 	sha256sums = SKIP
 	sha256sums = SKIP
 	sha256sums = SKIP

@@ -2,7 +2,7 @@
 set -e
 
 # Constants
-ASTRBOT_ROOT="/var/lib/astrbot"
+SYSTEM_ROOT="/var/lib/astrbot"
 CONFIG_DIR="/etc/astrbot"
 APP_DIR="/opt/astrbot"
 CACHE_DIR="/var/cache/astrbot"
@@ -25,16 +25,38 @@ require_instance() {
     fi
 }
 
+run_astrbot() {
+    # Set up UV environment
+    export UV_CACHE_DIR="$CACHE_DIR/uv"
+    export UV_PROJECT_ENVIRONMENT="$CACHE_DIR/venv-$instance"
+    export ASTRBOT_SYSTEMD=1
+
+    # Export ASTRBOT_ROOT if set (usually by run/cli commands)
+    if [ -n "$ASTRBOT_ROOT" ]; then
+        export ASTRBOT_ROOT
+    fi
+
+    # Switch to data directory if available
+    if [ -n "$ASTRBOT_ROOT" ] && [ -d "$ASTRBOT_ROOT" ]; then
+        cd "$ASTRBOT_ROOT"
+    fi
+
+    # Execute AstrBot
+    # --project points to the source code location
+    # --no-sync allows runtime modifications (plugins) without lockfile sync issues
+    exec uv run --project "$APP_DIR" --no-sync --python 3.12 astrbot "$@"
+}
+
 case "$cmd" in
 init)
     require_root
     require_instance
 
-    DATA_DIR="$ASTRBOT_ROOT/$instance"
+    ASTRBOT_ROOT="$SYSTEM_ROOT/$instance"
     CONF_FILE="$CONFIG_DIR/$instance.conf"
 
-    if [ -d "$DATA_DIR" ]; then
-        echo "⚠️  Instance data directory already exists: $DATA_DIR"
+    if [ -d "$ASTRBOT_ROOT" ]; then
+        echo "⚠️  Instance data directory already exists: $ASTRBOT_ROOT"
         exit 1
     fi
 
@@ -42,24 +64,50 @@ init)
 
     # Create data directory with correct ownership (astrbot user)
     # We assume the 'astrbot' user exists (created by .install script)
-    install -dm755 -o astrbot -g astrbot "$DATA_DIR"
+    install -dm755 -o astrbot -g astrbot "$ASTRBOT_ROOT"
 
-    # Simple port allocation logic
-    # Start from 3000, check if port is in use via ss (part of iproute2)
+    # Intelligent port allocation logic
+    # 1. Collect ports used in existing config files
+    # 2. Check active ports via ss
     PORT=3000
-    while ss -lntH | awk '{print $4}' | grep -q ":$PORT$"; do
-        PORT=$((PORT + 1))
+
+    while :; do
+        # Check if port is already configured in another instance
+        if grep -q "^PORT=$PORT$" "$CONFIG_DIR"/*.conf 2>/dev/null; then
+            PORT=$((PORT + 1))
+            continue
+        fi
+
+        # Check if active port is listening (occupied by running instance or other process)
+        if ss -lntH | awk '{print $4}' | grep -q ":$PORT$"; then
+            PORT=$((PORT + 1))
+            continue
+        fi
+
+        # Found free port
+        break
     done
 
-    # Write config file
-    echo "# AstrBot Instance Configuration: $instance" >"$CONF_FILE"
-    echo "PORT=$PORT" >>"$CONF_FILE"
+    # Write config file using template
+    TEMPLATE_FILE="$APP_DIR/config.template"
+
+    if [ ! -f "$TEMPLATE_FILE" ]; then
+        echo "❌ Error: Config template not found at $TEMPLATE_FILE"
+        exit 1
+    fi
+
+    # Use | as delimiter to avoid issues with slashes in paths
+    # shellcheck disable=SC2016
+    sed -e 's|${INSTANCE_NAME}|'"$instance"'|g' \
+        -e 's|${PORT}|'"$PORT"'|g' \
+        -e 's|${ASTRBOT_ROOT}|'"$ASTRBOT_ROOT"'|g' \
+        "$TEMPLATE_FILE" >"$CONF_FILE"
 
     # Secure the config file
     chmod 644 "$CONF_FILE"
 
     echo "✅ Instance initialized."
-    echo "   Data Directory: $DATA_DIR"
+    echo "   Data Directory: $ASTRBOT_ROOT"
     echo "   Configuration:  $CONF_FILE"
     echo "   Port:           $PORT"
     echo ""
@@ -67,19 +115,95 @@ init)
     echo "   systemctl start astrbot@$instance"
     ;;
 
+cp)
+    require_root
+    # usage: astrbotctl cp <src> <dest>
+    SRC_INSTANCE="$2"
+    DEST_INSTANCE="$3"
+
+    if [ -z "$SRC_INSTANCE" ] || [ -z "$DEST_INSTANCE" ]; then
+        echo "Usage: astrbotctl cp <source_instance> <dest_instance>"
+        exit 1
+    fi
+
+    SRC_ROOT="$SYSTEM_ROOT/$SRC_INSTANCE"
+    DEST_ROOT="$SYSTEM_ROOT/$DEST_INSTANCE"
+    DEST_CONF="$CONFIG_DIR/$DEST_INSTANCE.conf"
+
+    if [ ! -d "$SRC_ROOT" ]; then
+        echo "❌ Error: Source instance '$SRC_INSTANCE' does not exist."
+        exit 1
+    fi
+
+    if [ -d "$DEST_ROOT" ]; then
+        echo "❌ Error: Destination instance directory '$DEST_ROOT' already exists."
+        exit 1
+    fi
+
+    if [ -f "$DEST_CONF" ]; then
+        echo "❌ Error: Destination config '$DEST_CONF' already exists."
+        exit 1
+    fi
+
+    echo ">>> Copying instance: $SRC_INSTANCE -> $DEST_INSTANCE"
+
+    # Copy data directory
+    echo "    Copying data directory..."
+    cp -r "$SRC_ROOT" "$DEST_ROOT"
+
+    # Fix permissions
+    chown -R astrbot:astrbot "$DEST_ROOT"
+
+    # Find new port (reuse logic from init)
+    PORT=3000
+    while :; do
+        if grep -q "^PORT=$PORT$" "$CONFIG_DIR"/*.conf 2>/dev/null; then
+            PORT=$((PORT + 1))
+            continue
+        fi
+
+        if ss -lntH | awk '{print $4}' | grep -q ":$PORT$"; then
+            PORT=$((PORT + 1))
+            continue
+        fi
+        break
+    done
+
+    # Write new config
+    TEMPLATE_FILE="$APP_DIR/config.template"
+    if [ ! -f "$TEMPLATE_FILE" ]; then
+        echo "❌ Error: Config template not found at $TEMPLATE_FILE"
+        # Cleanup
+        rm -rf "$DEST_ROOT"
+        exit 1
+    fi
+
+    # shellcheck disable=SC2016
+    sed -e 's|${INSTANCE_NAME}|'"$DEST_INSTANCE"'|g' \
+        -e 's|${PORT}|'"$PORT"'|g' \
+        -e 's|${ASTRBOT_ROOT}|'"$DEST_ROOT"'|g' \
+        "$TEMPLATE_FILE" >"$DEST_CONF"
+
+    chmod 644 "$DEST_CONF"
+
+    echo "✅ Instance copied."
+    echo "   Source: $SRC_INSTANCE"
+    echo "   Dest:   $DEST_INSTANCE"
+    echo "   Port:   $PORT"
+    echo ""
+    echo "To start the new instance:"
+    echo "   systemctl start astrbot@$DEST_INSTANCE"
+    ;;
+
 run)
     # This is typically called by systemd (User=astrbot)
     # It can also be called manually for debugging
     require_instance
 
-    DATA_DIR="$ASTRBOT_ROOT/$instance"
     CONF_FILE="$CONFIG_DIR/$instance.conf"
 
-    if [ ! -d "$DATA_DIR" ]; then
-        echo "❌ Error: Instance directory $DATA_DIR does not exist."
-        echo "   Run 'sudo astrbotctl init $instance' first."
-        exit 1
-    fi
+    # Default ASTRBOT_ROOT (can be overridden by config)
+    ASTRBOT_ROOT="$SYSTEM_ROOT/$instance"
 
     # Load configuration
     # If run via systemd EnvironmentFile, variables might already be set,
@@ -89,22 +213,38 @@ run)
         . "$CONF_FILE"
     fi
 
-    # Set up UV environment
-    export UV_CACHE_DIR="$CACHE_DIR/uv"
-    export UV_PROJECT_ENVIRONMENT="$CACHE_DIR/venv-$instance"
-
-    # Change to app directory to find pyproject.toml
-    cd "$APP_DIR"
+    if [ ! -d "$ASTRBOT_ROOT" ]; then
+        echo "❌ Error: Instance directory $ASTRBOT_ROOT does not exist."
+        echo "   Run 'sudo astrbotctl init $instance' first."
+        exit 1
+    fi
 
     echo ">>> Starting AstrBot instance: $instance"
+    echo ">>> Host: ${HOST:-0.0.0.0}"
     echo ">>> Port: ${PORT:-default}"
 
-    # Execute AstrBot
-    # --frozen ensures uv doesn't try to write to uv.lock in /opt/astrbot (which is read-only)
-    # We assume astrbot accepts --data-dir and --port arguments.
-    exec uv run --frozen --python 3.12 astrbot \
-        --data-dir "$DATA_DIR" \
-        ${PORT:+--port $PORT}
+    run_astrbot run \
+        --root "$ASTRBOT_ROOT" \
+        --host "${HOST:-0.0.0.0}" \
+        ${PORT:+--port $PORT} \
+        $EXTRA_ARGS # shellcheck disable=SC2086
+    ;;
+
+cli)
+    require_instance
+
+    CONF_FILE="$CONFIG_DIR/$instance.conf"
+    # Default ASTRBOT_ROOT
+    ASTRBOT_ROOT="$SYSTEM_ROOT/$instance"
+
+    # Load configuration
+    if [ -f "$CONF_FILE" ]; then
+        # shellcheck disable=SC1090
+        . "$CONF_FILE"
+    fi
+
+    shift 2
+    run_astrbot "$@"
     ;;
 
 start | stop | restart | enable | disable | status)
@@ -116,9 +256,9 @@ start | stop | restart | enable | disable | status)
 
 list)
     echo "=== AstrBot Instances ==="
-    if [ -d "$ASTRBOT_ROOT" ]; then
+    if [ -d "$SYSTEM_ROOT" ]; then
         # List subdirectories in /var/lib/astrbot
-        ls -1 "$ASTRBOT_ROOT" 2>/dev/null || echo "(No instances found)"
+        ls -1 "$SYSTEM_ROOT" 2>/dev/null || echo "(No instances found)"
     else
         echo "(No instances found)"
     fi
@@ -129,6 +269,7 @@ list)
     echo ""
     echo "Usage:"
     echo "  sudo astrbotctl init <name>     # Create a new instance"
+    echo "  sudo astrbotctl cp <src> <dst>  # Copy an instance"
     echo "  astrbotctl start <name>         # Start via systemd"
     echo "  astrbotctl stop <name>          # Stop via systemd"
     echo "  astrbotctl status <name>        # Check status"
@@ -136,6 +277,7 @@ list)
     echo ""
     echo "Debugging:"
     echo "  astrbotctl run <name>           # Run in foreground"
+    echo "  astrbotctl cli <name> [args]    # Run astrbot command directly"
     exit 1
     ;;
 esac

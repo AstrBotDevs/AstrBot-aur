@@ -3,7 +3,7 @@
 pkgname=astrbot-git
 _pkgname=astrbot
 pkgver=4.20.1.r107.g294646048
-pkgrel=10
+pkgrel=11
 pkgdesc="Agentic IM Chatbot infrastructure (multi-instance, astrbotctl only)"
 arch=('any')
 url="https://github.com/AstrBotDevs/AstrBot"
@@ -19,9 +19,10 @@ source=(
     "$pkgname::git+$url.git#branch=dev"
     "astrbotctl"
     "astrbot@.service"
+    "config.template"
 )
 
-sha256sums=('SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 install=astrbot-git.install
 
@@ -41,6 +42,9 @@ package() {
     # 程序本体
     install -d "$pkgdir$_appdir"
     cp -r astrbot scripts pyproject.toml README.md LICENSE "$pkgdir$_appdir/"
+
+    # 配置文件模板
+    install -Dm644 "$srcdir/config.template" "$pkgdir$_appdir/config.template"
 
     # 控制工具（唯一入口）
     install -Dm755 "$srcdir/astrbotctl" \

@@ -58,18 +58,22 @@ post_install() {
     echo "AstrBot 已安装（多实例支持，仅使用 astrbotctl）"
     echo ""
     echo "【创建实例】"
-    echo "  sudo astrbotctl init <实例名>"
+    echo "  sudo astrbotctl init <实例名>     # 初始化新实例"
+    echo "  sudo astrbotctl cp <src> <dest>   # 复制/克隆实例"
     echo ""
-    echo "【运行实例】"
+    echo "【运行服务】"
     echo "  sudo systemctl start astrbot@<实例名>"
     echo "  sudo systemctl enable astrbot@<实例名>"
     echo ""
-    echo "【管理实例】"
-    echo "  astrbotctl status <实例名>"
-    echo "  astrbotctl list"
+    echo "【高级管理】"
+    echo "  astrbotctl list                   # 列出所有实例"
+    echo "  astrbotctl cli <实例名> <命令>    # 执行 AstrBot 原生命令"
+    echo "    例如：astrbotctl cli bot1 plug list"
     echo ""
-    echo "实例数据目录： /var/lib/astrbot/<实例名>"
-    echo "实例配置文件： /etc/astrbot/<实例名>.conf"
+    echo "【文件路径】"
+    echo "  数据目录： /var/lib/astrbot/<实例名>"
+    echo "  配置文件： /etc/astrbot/<实例名>.conf"
+    echo "  服务日志： journalctl -u astrbot@<实例名> -f"
     echo "-------------------------------------------------------------------"
 }
 
@@ -79,7 +83,7 @@ post_upgrade() {
 
     echo ">>> AstrBot 已更新"
     echo ">>> 如遇问题可清理缓存： sudo rm -rf /var/cache/astrbot/*"
-    echo ">>> 重要提示，原astrbot包装脚本已移除，请使用astrbotctl管理astrbot服务。"
+    echo ">>> 提示：使用 'astrbotctl cli <name> ...' 来管理插件或执行其他命令。"
 }
 
 post_remove() {
