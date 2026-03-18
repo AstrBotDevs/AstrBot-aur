@@ -74,10 +74,16 @@ load_instance_config() {
 
 run_astrbot() {
     # Set up UV environment
+    export HOME="$SYSTEM_ROOT"
+    export XDG_CACHE_HOME="/var/cache"
+    export XDG_CONFIG_HOME="/etc"
+    export XDG_DATA_HOME="/var/lib"
+    export XDG_STATE_HOME="/var/lib"
     export UV_CACHE_DIR="$CACHE_DIR/uv"
     export UV_PROJECT_ENVIRONMENT="$CACHE_DIR/venv-$instance"
     export UV_PYTHON_INSTALL_DIR="$CACHE_DIR/python"
     export ASTRBOT_SYSTEMD=1
+    export ASTRBOT_DESKTOP_CLIENT=0
 
     # When invoked as root, perform AstrBot/uv operations as the service user.
     # This keeps the venv and uv-managed Python runtime compatible with systemd.
@@ -85,11 +91,16 @@ run_astrbot() {
         export ASTRBOT_PRIVDROP_DONE=1
         exec runuser -u astrbot -- env \
             PATH="$PATH" \
-            HOME="$SYSTEM_ROOT" \
+            HOME="$HOME" \
+            XDG_CACHE_HOME="$XDG_CACHE_HOME" \
+            XDG_CONFIG_HOME="$XDG_CONFIG_HOME" \
+            XDG_DATA_HOME="$XDG_DATA_HOME" \
+            XDG_STATE_HOME="$XDG_STATE_HOME" \
             UV_CACHE_DIR="$UV_CACHE_DIR" \
             UV_PROJECT_ENVIRONMENT="$UV_PROJECT_ENVIRONMENT" \
             UV_PYTHON_INSTALL_DIR="$UV_PYTHON_INSTALL_DIR" \
             ASTRBOT_SYSTEMD="$ASTRBOT_SYSTEMD" \
+            ASTRBOT_DESKTOP_CLIENT="$ASTRBOT_DESKTOP_CLIENT" \
             ASTRBOT_ROOT="${ASTRBOT_ROOT:-}" \
             ASTRBOT_PRIVDROP_DONE="$ASTRBOT_PRIVDROP_DONE" \
             sh -c 'cd "$1" && exec "$2" __run_astrbot "$3" "${@:4}"' sh \

@@ -12,6 +12,15 @@ Group=astrbot
 # but can be overridden here if needed.
 Environment="ASTRBOT_ROOT=/var/lib/astrbot/%i"
 Environment="ASTRBOT_SYSTEMD=1"
+Environment="ASTRBOT_DESKTOP_CLIENT=0"
+Environment="HOME=/var/lib/astrbot"
+Environment="XDG_CACHE_HOME=/var/cache"
+Environment="XDG_CONFIG_HOME=/etc"
+Environment="XDG_DATA_HOME=/var/lib"
+Environment="XDG_STATE_HOME=/var/lib"
+Environment="UV_CACHE_DIR=/var/cache/astrbot/uv"
+Environment="UV_PYTHON_INSTALL_DIR=/var/cache/astrbot/python"
+Environment="UV_PROJECT_ENVIRONMENT=/var/cache/astrbot/venv-%i"
 
 # Instance Configuration
 EnvironmentFile=-/etc/astrbot/%i.conf
