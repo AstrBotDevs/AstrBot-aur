@@ -85,13 +85,15 @@ run_astrbot() {
         export ASTRBOT_PRIVDROP_DONE=1
         exec runuser -u astrbot -- env \
             PATH="$PATH" \
+            HOME="$SYSTEM_ROOT" \
             UV_CACHE_DIR="$UV_CACHE_DIR" \
             UV_PROJECT_ENVIRONMENT="$UV_PROJECT_ENVIRONMENT" \
             UV_PYTHON_INSTALL_DIR="$UV_PYTHON_INSTALL_DIR" \
             ASTRBOT_SYSTEMD="$ASTRBOT_SYSTEMD" \
             ASTRBOT_ROOT="${ASTRBOT_ROOT:-}" \
             ASTRBOT_PRIVDROP_DONE="$ASTRBOT_PRIVDROP_DONE" \
-            "$0" __run_astrbot "$instance" "$@"
+            sh -c 'cd "$1" && exec "$2" __run_astrbot "$3" "${@:4}"' sh \
+            "$SYSTEM_ROOT" "$0" "$instance" "$@"
     fi
 
     VENV_PYTHON="$UV_PROJECT_ENVIRONMENT/bin/python"
