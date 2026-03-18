@@ -10,7 +10,7 @@ _ensure_environment() {
     # install -d 会创建目录如果不存在
     install -dm755 -o astrbot -g astrbot /var/lib/astrbot
     install -dm755 -o astrbot -g astrbot /var/cache/astrbot
-    install -dm755 -o root    -g root    /etc/astrbot
+    install -dm755 -o root -g root /etc/astrbot
 
     # 确保递归权限正确 (修复升级或手动修改后的权限)
     # 使用 if 检查防止在极少数情况下目录未创建导致脚本报错
@@ -34,8 +34,8 @@ pre_install() {
     user_home="$(getent passwd "$SUDO_USER" 2>/dev/null | cut -d: -f6)"
 
     if [ -n "$user_home" ]; then
-        if [ -f "$user_home/.local/bin/astrbot" ] || \
-           [ -d "$user_home/.local/share/uv/tools/astrbot" ]; then
+        if [ -f "$user_home/.local/bin/astrbot" ] ||
+            [ -d "$user_home/.local/share/uv/tools/astrbot" ]; then
             echo ""
             echo "============== ❌ 检测到 uv tool 安装的 astrbot =============="
             echo "请先卸载："
@@ -81,9 +81,10 @@ post_upgrade() {
     _ensure_environment
     systemctl daemon-reload
 
-    echo ">>> AstrBot 已更新"
+    echo ">>> AstrBot 已更新，当前为非稳定版本，请注意备份数据（astrbot bk）。"
     echo ">>> 如遇问题可清理缓存： sudo rm -rf /var/cache/astrbot/*"
     echo ">>> 提示：使用 'astrbotctl cli <name> ...' 来管理插件或执行其他命令。"
+    echo ">>> 提示：使用 paru -Syu --devel 来更新开发版本，或者手动清理缓存。"
 }
 
 post_remove() {
