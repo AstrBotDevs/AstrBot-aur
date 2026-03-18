@@ -85,6 +85,17 @@ post_upgrade() {
     echo ">>> 如遇问题可清理缓存： sudo rm -rf /var/cache/astrbot/*"
     echo ">>> 提示：使用 'astrbotctl cli <name> ...' 来管理插件或执行其他命令。"
     echo ">>> 提示：使用paru -S astrbot-git --devel 来更新开发版本，或者手动清理缓存。"
+    echo ">>> 提示: 创建实例："
+    echo ">>> sudo astrbotctl init light"
+    echo ">>> sudo astrbotctl run light # 在当前会话启动实例"
+    echo ">>> sudo astrbotctl start light # 在启动实例服务（等价于sudo systemctl start astrbot@light）"
+    echo ">>> sudo astrbotctl stop light # 在停止实例服务（等价于sudo systemctl stop astrbot@light）"
+    echo ">>> sudo astrbotctl restart light # 在重启实例服务（等价于sudo systemctl restart astrbot@light）"
+    echo ">>> sudo astrbotctl status light # 在查看实例状态（等价于sudo systemctl status astrbot@light）"
+    echo "【文件路径】"
+    echo "  数据目录： /var/lib/astrbot/<实例名>"
+    echo "  配置文件： /etc/astrbot/<实例名>.conf"
+    echo "  服务日志： journalctl -u astrbot@<实例名> -f"
 }
 
 post_remove() {
