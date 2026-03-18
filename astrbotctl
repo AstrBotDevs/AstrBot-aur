@@ -123,6 +123,11 @@ init)
     # Secure the config file
     chmod 644 "$CONF_FILE"
 
+    echo ">>> Bootstrapping AstrBot data..."
+    (
+        run_astrbot init -b -y
+    )
+
     echo "✅ Instance initialized."
     echo "   Data Directory: $ASTRBOT_ROOT"
     echo "   Configuration:  $CONF_FILE"

@@ -60,7 +60,7 @@ post_install() {
     echo "【创建实例】"
     echo "  sudo astrbotctl init <实例名>     # 初始化新实例"
     echo "  sudo astrbotctl cp <src> <dest>   # 复制/克隆实例"
-    echo ""
+    echo "  更多命令请查看帮助：astrbotctl"
     echo "【运行服务】"
     echo "  sudo systemctl start astrbot@<实例名>"
     echo "  sudo systemctl enable astrbot@<实例名>"
