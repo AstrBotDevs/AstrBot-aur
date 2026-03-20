@@ -6,6 +6,7 @@ SYSTEM_ROOT="/var/lib/astrbot"
 CONFIG_DIR="/etc/astrbot"
 APP_DIR="/opt/astrbot"
 CACHE_DIR="/var/cache/astrbot"
+CERTBOT_INSTANCE_CERTS_DIR="/etc/astrbot/certs"
 UPSTREAM_URL="https://github.com/AstrBotDevs/AstrBot.git"
 UPSTREAM_BRANCH="dev"
 
@@ -43,6 +44,7 @@ print_help() {
     echo "  sudo astrbotctl cp <src> <dst>                   # Copy an instance"
     echo "  sudo astrbotctl rm <name>                        # Remove an instance"
     echo "  sudo astrbotctl reset <name>                     # Regenerate config from template"
+    echo "  sudo astrbotctl certbot <name>                   # Issue/renew HTTPS certs for an instance"
     echo "  astrbotctl start <name>                          # Start via systemd"
     echo "  astrbotctl stop <name>                           # Stop via systemd"
     echo "  astrbotctl status <name>                         # Check status"
@@ -323,6 +325,184 @@ print_paths() {
     fi
 }
 
+upsert_conf_var() {
+    conf_path="$1"
+    key="$2"
+    value="$3"
+    escaped_value=$(printf '%s' "$value" | sed 's/[\/&]/\\&/g')
+
+    if grep -q "^${key}=" "$conf_path" 2>/dev/null; then
+        sed -i "s/^${key}=.*/${key}=\"${escaped_value}\"/" "$conf_path"
+    else
+        printf '%s="%s"\n' "$key" "$value" >>"$conf_path"
+    fi
+}
+
+certbot_instance_cert_dir() {
+    echo "$CERTBOT_INSTANCE_CERTS_DIR/$instance"
+}
+
+certbot_hook_path() {
+    echo "/etc/letsencrypt/renewal-hooks/deploy/astrbot-${instance}.sh"
+}
+
+sync_certbot_cert_for_instance() {
+    cert_name="$1"
+    live_dir="/etc/letsencrypt/live/$cert_name"
+    src_cert="$live_dir/fullchain.pem"
+    src_key="$live_dir/privkey.pem"
+    dest_dir="$(certbot_instance_cert_dir)"
+
+    [ -f "$src_cert" ] || {
+        echo "❌ Error: Certificate file not found: $src_cert"
+        return 1
+    }
+    [ -f "$src_key" ] || {
+        echo "❌ Error: Private key file not found: $src_key"
+        return 1
+    }
+
+    install -d -m750 -o root -g astrbot "$dest_dir"
+    install -m640 -o root -g astrbot "$src_cert" "$dest_dir/fullchain.pem"
+    install -m640 -o root -g astrbot "$src_key" "$dest_dir/privkey.pem"
+}
+
+install_certbot_deploy_hook() {
+    cert_name="$1"
+    hook_path="$(certbot_hook_path)"
+
+    install -d -m755 /etc/letsencrypt/renewal-hooks/deploy
+    cat >"$hook_path" <<EOF
+#!/bin/sh
+set -e
+/usr/bin/astrbotctl __certbot-deploy "${instance}" "${cert_name}"
+EOF
+    chmod 755 "$hook_path"
+}
+
+enable_certbot_renew_timer() {
+    if systemctl list-unit-files certbot-renew.timer >/dev/null 2>&1; then
+        systemctl enable --now certbot-renew.timer
+        return 0
+    fi
+
+    if systemctl list-unit-files certbot.timer >/dev/null 2>&1; then
+        systemctl enable --now certbot.timer
+        return 0
+    fi
+
+    echo "⚠️  Warning: No certbot renewal timer unit found. Configure renewal manually."
+    return 1
+}
+
+configure_instance_certbot() {
+    require_root
+    require_instance
+
+    if ! command -v certbot >/dev/null 2>&1; then
+        echo "❌ Error: certbot is not installed."
+        return 1
+    fi
+
+    load_instance_config
+    CONF_FILE="$(conf_file)"
+
+    if [ ! -d "$ASTRBOT_ROOT" ] || [ ! -f "$CONF_FILE" ]; then
+        echo "❌ Error: Instance '$instance' is not initialized."
+        return 1
+    fi
+
+    current_domains="${ASTRBOT_CERTBOT_DOMAINS:-}"
+    current_email="${ASTRBOT_CERTBOT_EMAIL:-}"
+    cert_name="astrbot-${instance}"
+
+    if [ -n "$current_domains" ]; then
+        printf "Domains for %s (space-separated) [%s]: " "$instance" "$current_domains"
+    else
+        printf "Domains for %s (space-separated): " "$instance"
+    fi
+    read -r domains_input
+    [ -z "$domains_input" ] && domains_input="$current_domains"
+    [ -n "$domains_input" ] || {
+        echo "❌ Error: At least one domain is required."
+        return 1
+    }
+
+    if [ -n "$current_email" ]; then
+        printf "Email for Let's Encrypt notices [%s]: " "$current_email"
+    else
+        printf "Email for Let's Encrypt notices: "
+    fi
+    read -r email_input
+    [ -z "$email_input" ] && email_input="$current_email"
+    [ -n "$email_input" ] || {
+        echo "❌ Error: Email is required."
+        return 1
+    }
+
+    domain_args=""
+    for domain in $domains_input; do
+        domain_args="$domain_args -d $domain"
+    done
+
+    if ss -lntH "( sport = :80 )" 2>/dev/null | grep -q .; then
+        echo "❌ Error: Port 80 is in use. certbot standalone HTTP-01 validation requires TCP/80."
+        echo "   Stop the process using port 80, then retry."
+        return 1
+    fi
+
+    echo ">>> Requesting Let's Encrypt certificate via certbot standalone..."
+    # shellcheck disable=SC2086
+    certbot certonly \
+        --standalone \
+        --preferred-challenges http \
+        --http-01-port 80 \
+        --agree-tos \
+        --non-interactive \
+        --email "$email_input" \
+        --cert-name "$cert_name" \
+        $domain_args
+
+    sync_certbot_cert_for_instance "$cert_name"
+
+    cert_dir="$(certbot_instance_cert_dir)"
+    cert_file="$cert_dir/fullchain.pem"
+    key_file="$cert_dir/privkey.pem"
+
+    upsert_conf_var "$CONF_FILE" "ASTRBOT_DASHBOARD_SSL_ENABLE" "true"
+    upsert_conf_var "$CONF_FILE" "ASTRBOT_SSL_CERT" "$cert_file"
+    upsert_conf_var "$CONF_FILE" "ASTRBOT_SSL_KEY" "$key_file"
+    upsert_conf_var "$CONF_FILE" "ASTRBOT_CERTBOT_MANAGED" "true"
+    upsert_conf_var "$CONF_FILE" "ASTRBOT_CERTBOT_CERT_NAME" "$cert_name"
+    upsert_conf_var "$CONF_FILE" "ASTRBOT_CERTBOT_DOMAINS" "$domains_input"
+    upsert_conf_var "$CONF_FILE" "ASTRBOT_CERTBOT_EMAIL" "$email_input"
+
+    install_certbot_deploy_hook "$cert_name"
+    enable_certbot_renew_timer || true
+
+    echo ">>> Restarting astrbot instance: $instance"
+    systemctl restart "astrbot@$instance"
+
+    echo "✅ HTTPS configured for '$instance'"
+    echo "   Certificate: $cert_file"
+    echo "   Private key: $key_file"
+    echo "   Renewal hook: $(certbot_hook_path)"
+}
+
+handle_certbot_deploy() {
+    require_root
+    require_instance
+
+    cert_name="$3"
+    [ -n "$cert_name" ] || {
+        echo "❌ Error: Missing certbot cert name."
+        return 1
+    }
+
+    sync_certbot_cert_for_instance "$cert_name"
+    systemctl try-restart "astrbot@${instance}.service" >/dev/null 2>&1 || true
+}
+
 iter_instances() {
     if [ ! -d "$SYSTEM_ROOT" ]; then
         return 0
@@ -451,6 +631,10 @@ run_astrbot() {
 }
 
 case "$cmd" in
+__certbot-deploy)
+    handle_certbot_deploy "$@"
+    ;;
+
 __run_astrbot)
     require_instance
     shift 2
@@ -674,6 +858,14 @@ rm)
     ASTRBOT_ROOT="$SYSTEM_ROOT/$instance"
     CONF_FILE="$CONFIG_DIR/$instance.conf"
     VENV_DIR="$CACHE_DIR/venv-$instance"
+    CERTBOT_MANAGED=""
+    CERTBOT_CERT_NAME=""
+
+    if [ -f "$CONF_FILE" ]; then
+        load_instance_config
+        CERTBOT_MANAGED="${ASTRBOT_CERTBOT_MANAGED:-}"
+        CERTBOT_CERT_NAME="${ASTRBOT_CERTBOT_CERT_NAME:-}"
+    fi
 
     # Check if instance exists (either data dir or config)
     if [ ! -d "$ASTRBOT_ROOT" ] && [ ! -f "$CONF_FILE" ]; then
@@ -710,6 +902,21 @@ rm)
         rm -rf "$VENV_DIR"
     fi
 
+    if [ -f "$(certbot_hook_path)" ]; then
+        echo "    Removing certbot renewal hook: $(certbot_hook_path)"
+        rm -f "$(certbot_hook_path)"
+    fi
+
+    if [ -d "$(certbot_instance_cert_dir)" ]; then
+        echo "    Removing managed certificate copy: $(certbot_instance_cert_dir)"
+        rm -rf "$(certbot_instance_cert_dir)"
+    fi
+
+    if [ "$CERTBOT_MANAGED" = "true" ] && [ -n "$CERTBOT_CERT_NAME" ] && command -v certbot >/dev/null 2>&1; then
+        echo "    Removing managed certbot certificate: $CERTBOT_CERT_NAME"
+        certbot delete --non-interactive --cert-name "$CERTBOT_CERT_NAME" >/dev/null 2>&1 || true
+    fi
+
     echo "✅ Instance '$instance' removed."
     ;;
 
@@ -730,6 +937,15 @@ reset)
     fi
 
     exit 1
+    ;;
+
+certbot)
+    if [ "$2" = "-h" ] || [ "$2" = "--help" ]; then
+        echo "Usage: sudo astrbotctl certbot <name>"
+        exit 0
+    fi
+
+    configure_instance_certbot
     ;;
 
 run)
