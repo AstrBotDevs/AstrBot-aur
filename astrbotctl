@@ -12,892 +12,125 @@ UPSTREAM_BRANCH="dev"
 cmd="$1"
 instance="$2"
 
-# Helpers
 require_root() {
-    if [ "$(id -u)" -ne 0 ]; then
-        echo "❌ Error: This command requires root privileges (sudo)."
+    [ "$(id -u)" -ne 0 ] && {
+        echo "❌ Need root"
         exit 1
-    fi
+    }
 }
 
 require_instance() {
-    if [ -z "$instance" ]; then
-        echo "Usage: astrbotctl <command> <instance_name>"
+    [ -z "$instance" ] && {
+        echo "Usage: astrbotctl <cmd> <instance>"
         exit 1
-    fi
+    }
 }
 
-print_help() {
-    echo "AstrBot Control Tool"
-    echo ""
-    echo "Usage:"
-    echo "  sudo astrbotctl init [-f backup.zip] <name>      # Create a new instance"
-    echo "  sudo astrbotctl cp <src> <dst>                   # Copy an instance"
-    echo "  sudo astrbotctl rm <name>                        # Remove an instance"
-    echo "  astrbotctl start <name>                          # Start via systemd"
-    echo "  astrbotctl stop <name>                           # Stop via systemd"
-    echo "  astrbotctl status <name>                         # Check status"
-    echo "  astrbotctl list                                  # List instances"
-    echo "  astrbotctl password [options] <name>             # Change dashboard password"
-    echo "  astrbotctl export [options] <name>               # Export instance backup"
-    echo "  astrbotctl import [options] <name> <backup_file> # Import instance backup"
-    echo "  sudo astrbotctl git pull [--sync] [instance|--all]            # Pull latest app source"
-    echo "  sudo astrbotctl git pull --rebuild-venv [instance|--all]      # Pull and rebuild instance venv(s)"
-    echo ""
-    echo "Init options:"
-    echo "  -f, --backup <file>  Initialize the instance from a backup archive"
-    echo ""
-    echo "Password options:"
-    echo "  -u, --username <name>  Update dashboard username"
-    echo "  -p, --password <pass>  Set dashboard password non-interactively"
-    echo ""
-    echo "Export options:"
-    echo "  -o, --output <dir>             Output directory"
-    echo "  -S, --gpg-sign                 Sign backup with GPG"
-    echo "  -E, --gpg-encrypt <recipient>  Encrypt for GPG recipient"
-    echo "  -C, --gpg-symmetric            Symmetric encryption"
-    echo "  -d, --digest <algo>            Generate digest"
-    echo ""
-    echo "Import options:"
-    echo "  -y, --yes  Skip confirmation prompts"
-    echo ""
-    echo "Debugging:"
-    echo "  astrbotctl run <name> [astrbot-run-args]     # Run in foreground"
-    echo "  astrbotctl cli <name> [args]                 # Run astrbot command directly"
+conf_file() {
+    echo "$CONFIG_DIR/$instance.conf"
 }
 
-load_instance_config() {
-    CONF_FILE="$CONFIG_DIR/$instance.conf"
-    ASTRBOT_ROOT="$SYSTEM_ROOT/$instance"
-    ASTRBOT_HOME="$ASTRBOT_ROOT/home"
-
-    if [ -f "$CONF_FILE" ]; then
-        # shellcheck disable=SC1090
-        . "$CONF_FILE"
-    fi
-}
-
-setup_runtime_env() {
-    runtime_root="${ASTRBOT_HOME:-$SYSTEM_ROOT/home}"
-    runtime_cache="$runtime_root/.cache"
-    runtime_config="$runtime_root/.config"
-    runtime_data="$runtime_root/.local/share"
-    runtime_state="$runtime_root/.local/state"
-
-    astrbot_data="$ASTRBOT_ROOT/data"
-    astrbot_data_config="$astrbot_data/config"
-    astrbot_data_plugins="$astrbot_data/plugins"
-    astrbot_data_temp="$astrbot_data/temp"
-    astrbot_data_skills="$astrbot_data/skills"
-    astrbot_data_site_packages="$astrbot_data/site-packages"
-    astrbot_date_knowledge_base="$astrbot_data/knowledge_base"
-    astrbot_data_backups="$astrbot_data/backups"
-    astrbot_data_t2i_templates="$astrbot_data/t2i_templates"
-    astrbot_data_webchat="$astrbot_data/webchat"
-
-    export HOME="$runtime_root"
-    export ASTRBOT_ROOT="$ASTRBOT_ROOT"
-    export XDG_CACHE_HOME="$runtime_cache"
-    export XDG_CONFIG_HOME="$runtime_config"
-    export XDG_DATA_HOME="$runtime_data"
-    export XDG_STATE_HOME="$runtime_state"
-    export UV_CACHE_DIR="$CACHE_DIR/uv"
-    export UV_PROJECT_ENVIRONMENT="$CACHE_DIR/venv-$instance"
-    export UV_PYTHON_INSTALL_DIR="$CACHE_DIR/python"
-    export ASTRBOT_SYSTEMD=1
-    export ASTRBOT_DESKTOP_CLIENT=0
-
-    mkdir -p \
-        "$HOME" \
-        "$XDG_CONFIG_HOME" \
-        "$XDG_DATA_HOME" \
-        "$XDG_STATE_HOME" \
-        "$astrbot_data" \
-        "$astrbot_data_config" \
-        "$astrbot_data_plugins" \
-        "$astrbot_data_temp" \
-        "$astrbot_data_skills" \
-        "$astrbot_data_site_packages" \
-        "$astrbot_date_knowledge_base" \
-        "$astrbot_data_backups" \
-        "$astrbot_data_t2i_templates" \
-        "$astrbot_data_webchat"
-
-}
-
-run_astrbot_env_cmd() {
-    setup_runtime_env
-
-    if [ "$(id -u)" -eq 0 ] && [ -z "$ASTRBOT_PRIVDROP_DONE" ] && id astrbot >/dev/null 2>&1; then
-        runuser -u astrbot -- env \
-            PATH="$PATH" \
-            HOME="$HOME" \
-            XDG_CACHE_HOME="$XDG_CACHE_HOME" \
-            XDG_CONFIG_HOME="$XDG_CONFIG_HOME" \
-            XDG_DATA_HOME="$XDG_DATA_HOME" \
-            XDG_STATE_HOME="$XDG_STATE_HOME" \
-            UV_CACHE_DIR="$UV_CACHE_DIR" \
-            UV_PROJECT_ENVIRONMENT="$UV_PROJECT_ENVIRONMENT" \
-            UV_PYTHON_INSTALL_DIR="$UV_PYTHON_INSTALL_DIR" \
-            ASTRBOT_SYSTEMD="$ASTRBOT_SYSTEMD" \
-            ASTRBOT_DESKTOP_CLIENT="$ASTRBOT_DESKTOP_CLIENT" \
-            ASTRBOT_ROOT="${ASTRBOT_ROOT:-}" \
-            sh -c 'cd "$1" && shift && exec "$@"' sh \
-            "$runtime_root" "$@"
-    else
-        (
-            cd "$runtime_root"
-            exec "$@"
-        )
-    fi
-}
-
-ensure_instance_env_synced() {
-    setup_runtime_env
-
-    if [ ! -d "$UV_PROJECT_ENVIRONMENT" ]; then
-        echo ">>> Creating virtual environment for instance: $instance"
-        run_astrbot_env_cmd uv venv "$UV_PROJECT_ENVIRONMENT" --python 3.12
-    fi
-
-    echo ">>> Syncing Python environment for instance: $instance"
-    run_astrbot_env_cmd env \
-        VIRTUAL_ENV="$UV_PROJECT_ENVIRONMENT" \
-        PATH="$UV_PROJECT_ENVIRONMENT/bin:$PATH" \
-        uv pip install "$APP_DIR"
-}
-
-iter_instances() {
-    if [ ! -d "$SYSTEM_ROOT" ]; then
-        return 0
-    fi
-
-    find "$SYSTEM_ROOT" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort
-}
-
-ensure_app_git_repo() {
-    if [ -d "$APP_DIR/.git" ]; then
-        git -C "$APP_DIR" remote set-url origin "$UPSTREAM_URL"
-    else
-        echo ">>> Initializing Git repository in $APP_DIR"
-        install -d -m755 "$APP_DIR"
-        git -C "$APP_DIR" init
-        git -C "$APP_DIR" remote add origin "$UPSTREAM_URL"
-    fi
-
-    git -C "$APP_DIR" config core.sparseCheckout true
-
-    install -d -m755 "$APP_DIR/.git/info"
-    {
-        echo "/*"
-        echo "!/dashboard/"
-    } >"$APP_DIR/.git/info/sparse-checkout"
-}
-
-update_app_git_checkout() {
-    ensure_app_git_repo
-
-    echo ">>> Fetching latest AstrBot source from $UPSTREAM_URL ($UPSTREAM_BRANCH)"
-    git -C "$APP_DIR" fetch --depth=1 origin "$UPSTREAM_BRANCH"
-    git -C "$APP_DIR" checkout -f -B "$UPSTREAM_BRANCH" FETCH_HEAD
+venv_dir() {
+    echo "$CACHE_DIR/venv-$instance"
 }
 
 run_astrbot() {
-    setup_runtime_env
+    VENV="$(venv_dir)"
+    CONF="$(conf_file)"
 
-    # When invoked as root, perform AstrBot/uv operations as the service user.
-    # This keeps the venv and uv-managed Python runtime compatible with systemd.
-    if [ "$(id -u)" -eq 0 ] && [ -z "$ASTRBOT_PRIVDROP_DONE" ] && id astrbot >/dev/null 2>&1; then
-        export ASTRBOT_PRIVDROP_DONE=1
-        exec runuser -u astrbot -- env \
-            PATH="$PATH" \
-            HOME="$HOME" \
-            XDG_CACHE_HOME="$XDG_CACHE_HOME" \
-            XDG_CONFIG_HOME="$XDG_CONFIG_HOME" \
-            XDG_DATA_HOME="$XDG_DATA_HOME" \
-            XDG_STATE_HOME="$XDG_STATE_HOME" \
-            UV_CACHE_DIR="$UV_CACHE_DIR" \
-            UV_PROJECT_ENVIRONMENT="$UV_PROJECT_ENVIRONMENT" \
-            UV_PYTHON_INSTALL_DIR="$UV_PYTHON_INSTALL_DIR" \
-            ASTRBOT_SYSTEMD="$ASTRBOT_SYSTEMD" \
-            ASTRBOT_DESKTOP_CLIENT="$ASTRBOT_DESKTOP_CLIENT" \
-            ASTRBOT_ROOT="${ASTRBOT_ROOT:-}" \
-            ASTRBOT_PRIVDROP_DONE="$ASTRBOT_PRIVDROP_DONE" \
-            sh -c 'cd "$1" && exec "$2" __run_astrbot "$3" "${@:4}"' sh \
-            "$runtime_root" "$0" "$instance" "$@"
+    if [ ! -x "$VENV/bin/astrbot" ]; then
+        echo ">>> init venv"
+        uv venv "$VENV" --python 3.12
+        "$VENV/bin/pip" install "$APP_DIR"
     fi
 
-    VENV_PYTHON="$UV_PROJECT_ENVIRONMENT/bin/python"
-    VENV_ASTRBOT="$UV_PROJECT_ENVIRONMENT/bin/astrbot"
-
-    # Ensure environment is initialized
-    if [ ! -x "$VENV_ASTRBOT" ]; then
-        echo ">>> Initializing virtual environment..."
-        # Create venv if missing
-        if [ ! -d "$UV_PROJECT_ENVIRONMENT" ]; then
-            uv venv "$UV_PROJECT_ENVIRONMENT" --python 3.12
-        fi
-
-        # Activate environment for installation
-        export VIRTUAL_ENV="$UV_PROJECT_ENVIRONMENT"
-        export PATH="$VIRTUAL_ENV/bin:$PATH"
-
-        # Install astrbot package
-        uv pip install "$APP_DIR"
-    fi
-
-    # Export ASTRBOT_ROOT if set (usually by run/cli commands)
-    if [ -n "$ASTRBOT_ROOT" ]; then
-        export ASTRBOT_ROOT
-    fi
-
-    # Switch to data directory if available
-    if [ -n "$ASTRBOT_ROOT" ] && [ -d "$ASTRBOT_ROOT" ]; then
-        cd "$ASTRBOT_ROOT"
-    fi
-
-    # Execute AstrBot directly
-    exec "$VENV_ASTRBOT" "$@"
+    exec "$VENV/bin/astrbot" -c "$CONF" "$@"
 }
 
 case "$cmd" in
-__run_astrbot)
-    require_instance
-    shift 2
-    run_astrbot "$@"
-    ;;
 
 init)
-    shift
-    instance=""
-    BACKUP_FILE=""
-
-    while [ "$#" -gt 0 ]; do
-        case "$1" in
-        -f | --backup)
-            if [ -z "$2" ]; then
-                echo "❌ Error: Missing backup file after $1"
-                exit 1
-            fi
-            BACKUP_FILE="$2"
-            shift 2
-            ;;
-        -h | --help)
-            print_help
-            exit 0
-            ;;
-        -*)
-            echo "❌ Error: Unknown option: $1"
-            exit 1
-            ;;
-        *)
-            if [ -n "$instance" ]; then
-                echo "❌ Error: Unexpected extra argument: $1"
-                exit 1
-            fi
-            instance="$1"
-            shift
-            ;;
-        esac
-    done
-
-    require_instance
-    require_root
-
-    ASTRBOT_ROOT="$SYSTEM_ROOT/$instance"
-    CONF_FILE="$CONFIG_DIR/$instance.conf"
-
-    if [ -n "$BACKUP_FILE" ] && [ ! -f "$BACKUP_FILE" ]; then
-        echo "❌ Error: Backup file not found: $BACKUP_FILE"
-        exit 1
-    fi
-
-    if [ -d "$ASTRBOT_ROOT" ]; then
-        echo "⚠️  Instance data directory already exists: $ASTRBOT_ROOT"
-        exit 1
-    fi
-
-    echo ">>> Initializing instance: $instance"
-
-    # Create data directory with correct ownership (astrbot user)
-    # We assume the 'astrbot' user exists (created by .install script)
-    install -dm755 -o astrbot -g astrbot "$ASTRBOT_ROOT"
-    install -dm755 -o astrbot -g astrbot "$CACHE_DIR/venv-$instance"
-
-    # Intelligent port allocation logic
-    # 1. Collect ports used in existing config files
-    # 2. Check active ports via ss
-    PORT=3000
-
-    while :; do
-        # Check if port is already configured in another instance
-        if grep -q "^PORT=$PORT$" "$CONFIG_DIR"/*.conf 2>/dev/null; then
-            PORT=$((PORT + 1))
-            continue
-        fi
-
-        # Check if active port is listening (occupied by running instance or other process)
-        if ss -lntH | awk '{print $4}' | grep -q ":$PORT$"; then
-            PORT=$((PORT + 1))
-            continue
-        fi
-
-        # Found free port
-        break
-    done
-
-    # Write config file using template
-    TEMPLATE_FILE="$APP_DIR/config.template"
-
-    if [ ! -f "$TEMPLATE_FILE" ]; then
-        echo "❌ Error: Config template not found at $TEMPLATE_FILE"
-        exit 1
-    fi
-
-    # Use | as delimiter to avoid issues with slashes in paths
-    # shellcheck disable=SC2016
-    sed -e 's|${INSTANCE_NAME}|'"$instance"'|g' \
-        -e 's|${PORT}|'"$PORT"'|g' \
-        -e 's|${ASTRBOT_ROOT}|'"$ASTRBOT_ROOT"'|g' \
-        "$TEMPLATE_FILE" >"$CONF_FILE"
-
-    # Secure the config file
-    chmod 644 "$CONF_FILE"
-
-    echo ">>> Bootstrapping AstrBot data..."
-    (
-        if [ -n "$BACKUP_FILE" ]; then
-            run_astrbot init -y -b -f "$BACKUP_FILE"
-        else
-            run_astrbot init -y -b
-        fi
-    )
-
-    # Fix permissions for generated files and the per-instance venv.
-    # init is typically run as root, while the service runs as astrbot.
-    chown -R astrbot:astrbot "$ASTRBOT_ROOT"
-    if [ -d "$CACHE_DIR/venv-$instance" ]; then
-        chown -R astrbot:astrbot "$CACHE_DIR/venv-$instance"
-    fi
-
-    echo "✅ Instance initialized."
-    echo "   Data Directory: $ASTRBOT_ROOT"
-    echo "   Configuration:  $CONF_FILE"
-    echo "   Port:           $PORT"
-    echo ""
-    echo "To start the instance:"
-    echo "   systemctl start astrbot@$instance"
-    ;;
-
-cp)
-    require_root
-    # usage: astrbotctl cp <src> <dest>
-    SRC_INSTANCE="$2"
-    DEST_INSTANCE="$3"
-
-    if [ -z "$SRC_INSTANCE" ] || [ -z "$DEST_INSTANCE" ]; then
-        echo "Usage: astrbotctl cp <source_instance> <dest_instance>"
-        exit 1
-    fi
-
-    SRC_ROOT="$SYSTEM_ROOT/$SRC_INSTANCE"
-    DEST_ROOT="$SYSTEM_ROOT/$DEST_INSTANCE"
-    DEST_CONF="$CONFIG_DIR/$DEST_INSTANCE.conf"
-
-    if [ ! -d "$SRC_ROOT" ]; then
-        echo "❌ Error: Source instance '$SRC_INSTANCE' does not exist."
-        exit 1
-    fi
-
-    if [ -d "$DEST_ROOT" ]; then
-        echo "❌ Error: Destination instance directory '$DEST_ROOT' already exists."
-        exit 1
-    fi
-
-    if [ -f "$DEST_CONF" ]; then
-        echo "❌ Error: Destination config '$DEST_CONF' already exists."
-        exit 1
-    fi
-
-    echo ">>> Copying instance: $SRC_INSTANCE -> $DEST_INSTANCE"
-
-    # Copy data directory
-    echo "    Copying data directory..."
-    cp -r "$SRC_ROOT" "$DEST_ROOT"
-
-    # Fix permissions
-    chown -R astrbot:astrbot "$DEST_ROOT"
-
-    # Find new port (reuse logic from init)
-    PORT=3000
-    while :; do
-        if grep -q "^PORT=$PORT$" "$CONFIG_DIR"/*.conf 2>/dev/null; then
-            PORT=$((PORT + 1))
-            continue
-        fi
-
-        if ss -lntH | awk '{print $4}' | grep -q ":$PORT$"; then
-            PORT=$((PORT + 1))
-            continue
-        fi
-        break
-    done
-
-    # Write new config
-    TEMPLATE_FILE="$APP_DIR/config.template"
-    if [ ! -f "$TEMPLATE_FILE" ]; then
-        echo "❌ Error: Config template not found at $TEMPLATE_FILE"
-        # Cleanup
-        rm -rf "$DEST_ROOT"
-        exit 1
-    fi
-
-    # shellcheck disable=SC2016
-    sed -e 's|${INSTANCE_NAME}|'"$DEST_INSTANCE"'|g' \
-        -e 's|${PORT}|'"$PORT"'|g' \
-        -e 's|${ASTRBOT_ROOT}|'"$DEST_ROOT"'|g' \
-        "$TEMPLATE_FILE" >"$DEST_CONF"
-
-    chmod 644 "$DEST_CONF"
-
-    echo "✅ Instance copied."
-    echo "   Source: $SRC_INSTANCE"
-    echo "   Dest:   $DEST_INSTANCE"
-    echo "   Port:   $PORT"
-    echo ""
-    echo "To start the new instance:"
-    echo "   systemctl start astrbot@$DEST_INSTANCE"
-    ;;
-
-rm)
-    if [ "$2" = "-h" ] || [ "$2" = "--help" ]; then
-        echo "Usage: sudo astrbotctl rm <name>"
-        exit 0
-    fi
-
     require_root
     require_instance
 
-    ASTRBOT_ROOT="$SYSTEM_ROOT/$instance"
-    CONF_FILE="$CONFIG_DIR/$instance.conf"
-    VENV_DIR="$CACHE_DIR/venv-$instance"
+    ROOT="$SYSTEM_ROOT/$instance"
+    CONF="$(conf_file)"
 
-    # Check if instance exists (either data dir or config)
-    if [ ! -d "$ASTRBOT_ROOT" ] && [ ! -f "$CONF_FILE" ]; then
-        echo "❌ Error: Instance '$instance' does not exist."
+    [ -d "$ROOT" ] && {
+        echo "❌ exists"
         exit 1
-    fi
+    }
 
-    echo ">>> Removing instance: $instance"
+    install -dm755 -o astrbot -g astrbot "$ROOT"
 
-    # Stop and disable service
-    if systemctl is-active --quiet "astrbot@$instance"; then
-        echo "    Stopping service..."
-        systemctl stop "astrbot@$instance"
-    fi
+    PORT=3000
+    while ss -lnt | grep -q ":$PORT "; do
+        PORT=$((PORT + 1))
+    done
 
-    if systemctl is-enabled --quiet "astrbot@$instance" 2>/dev/null; then
-        echo "    Disabling service..."
-        systemctl disable "astrbot@$instance"
-    fi
+    cat >"$CONF" <<EOF
+INSTANCE_NAME="$instance"
+ASTRBOT_ROOT="$ROOT"
+PORT="$PORT"
+HOST="0.0.0.0"
+EOF
 
-    # Remove files
-    if [ -d "$ASTRBOT_ROOT" ]; then
-        echo "    Removing data directory: $ASTRBOT_ROOT"
-        rm -rf "$ASTRBOT_ROOT"
-    fi
-
-    if [ -f "$CONF_FILE" ]; then
-        echo "    Removing configuration: $CONF_FILE"
-        rm -f "$CONF_FILE"
-    fi
-
-    if [ -d "$VENV_DIR" ]; then
-        echo "    Removing virtual environment: $VENV_DIR"
-        rm -rf "$VENV_DIR"
-    fi
-
-    echo "✅ Instance '$instance' removed."
+    echo "✅ init done ($PORT)"
     ;;
 
 run)
-    # This is typically called by systemd (User=astrbot)
-    # It can also be called manually for debugging
     require_instance
-
-    load_instance_config
-
-    if [ ! -d "$ASTRBOT_ROOT" ]; then
-        echo "❌ Error: Instance directory $ASTRBOT_ROOT does not exist."
-        echo "   Run 'sudo astrbotctl init $instance' first."
-        exit 1
-    fi
-
     shift 2
-
-    echo ">>> Starting AstrBot instance: $instance"
-    echo ">>> Host: ${HOST:-0.0.0.0}"
-    echo ">>> Port: ${PORT:-default}"
-
-    # shellcheck disable=SC2086
-    run_astrbot run \
-        --root "$ASTRBOT_ROOT" \
-        --host "${HOST:-0.0.0.0}" \
-        ${PORT:+--port $PORT} \
-        $EXTRA_ARGS \
-        "$@"
+    run_astrbot run "$@"
     ;;
 
 cli)
     require_instance
-
-    load_instance_config
-
     shift 2
     run_astrbot "$@"
     ;;
 
-start | stop | restart | enable | disable | status)
-    if [ "$2" = "-h" ] || [ "$2" = "--help" ]; then
-        echo "Usage: astrbotctl $cmd <name>"
-        exit 0
-    fi
-
-    require_instance
-    # Pass through to systemctl
-    # status doesn't need root (usually), others do (via PolicyKit)
-    systemctl "$cmd" "astrbot@$instance"
-    ;;
-
-password)
-    shift
-    instance=""
-    PASSWORD_USERNAME=""
-    PASSWORD_VALUE=""
-
-    while [ "$#" -gt 0 ]; do
-        case "$1" in
-        -u | --username)
-            if [ -z "$2" ]; then
-                echo "❌ Error: Missing value after $1"
-                exit 1
-            fi
-            PASSWORD_USERNAME="$2"
-            shift 2
-            ;;
-        -p | --password)
-            if [ -z "$2" ]; then
-                echo "❌ Error: Missing value after $1"
-                exit 1
-            fi
-            PASSWORD_VALUE="$2"
-            shift 2
-            ;;
-        -h | --help)
-            echo "Usage: astrbotctl password [-u username] [-p password] <name>"
-            exit 0
-            ;;
-        -*)
-            echo "❌ Error: Unknown option: $1"
-            exit 1
-            ;;
-        *)
-            if [ -n "$instance" ]; then
-                echo "❌ Error: Unexpected extra argument: $1"
-                exit 1
-            fi
-            instance="$1"
-            shift
-            ;;
-        esac
-    done
-
-    require_instance
-    load_instance_config
-
-    if [ ! -d "$ASTRBOT_ROOT" ]; then
-        echo "❌ Error: Instance directory $ASTRBOT_ROOT does not exist."
-        exit 1
-    fi
-
-    if [ -n "$PASSWORD_USERNAME" ] && [ -n "$PASSWORD_VALUE" ]; then
-        run_astrbot conf password -u "$PASSWORD_USERNAME" -p "$PASSWORD_VALUE"
-    elif [ -n "$PASSWORD_USERNAME" ]; then
-        run_astrbot conf password -u "$PASSWORD_USERNAME"
-    elif [ -n "$PASSWORD_VALUE" ]; then
-        run_astrbot conf password -p "$PASSWORD_VALUE"
-    else
-        run_astrbot conf password
-    fi
-    ;;
-
-export)
-    shift
-    instance=""
-    EXPORT_OUTPUT=""
-    EXPORT_SIGN=0
-    EXPORT_ENCRYPT=""
-    EXPORT_SYMMETRIC=0
-    EXPORT_DIGEST=""
-
-    while [ "$#" -gt 0 ]; do
-        case "$1" in
-        -o | --output)
-            if [ -z "$2" ]; then
-                echo "❌ Error: Missing value after $1"
-                exit 1
-            fi
-            EXPORT_OUTPUT="$2"
-            shift 2
-            ;;
-        -E | --gpg-encrypt)
-            if [ -z "$2" ]; then
-                echo "❌ Error: Missing value after $1"
-                exit 1
-            fi
-            EXPORT_ENCRYPT="$2"
-            shift 2
-            ;;
-        -d | --digest)
-            if [ -z "$2" ]; then
-                echo "❌ Error: Missing value after $1"
-                exit 1
-            fi
-            EXPORT_DIGEST="$2"
-            shift 2
-            ;;
-        -S | --gpg-sign | -C | --gpg-symmetric)
-            if [ "$1" = "-S" ] || [ "$1" = "--gpg-sign" ]; then
-                EXPORT_SIGN=1
-            else
-                EXPORT_SYMMETRIC=1
-            fi
-            shift
-            ;;
-        -h | --help)
-            echo "Usage: astrbotctl export [backup options] <name>"
-            exit 0
-            ;;
-        -*)
-            echo "❌ Error: Unknown option: $1"
-            exit 1
-            ;;
-        *)
-            if [ -n "$instance" ]; then
-                echo "❌ Error: Unexpected extra argument: $1"
-                exit 1
-            fi
-            instance="$1"
-            shift
-            ;;
-        esac
-    done
-
-    require_instance
-    load_instance_config
-
-    if [ ! -d "$ASTRBOT_ROOT" ]; then
-        echo "❌ Error: Instance directory $ASTRBOT_ROOT does not exist."
-        exit 1
-    fi
-
-    set -- bk export
-    if [ -n "$EXPORT_OUTPUT" ]; then
-        set -- "$@" -o "$EXPORT_OUTPUT"
-    fi
-    if [ "$EXPORT_SIGN" -eq 1 ]; then
-        set -- "$@" -S
-    fi
-    if [ -n "$EXPORT_ENCRYPT" ]; then
-        set -- "$@" -E "$EXPORT_ENCRYPT"
-    fi
-    if [ "$EXPORT_SYMMETRIC" -eq 1 ]; then
-        set -- "$@" -C
-    fi
-    if [ -n "$EXPORT_DIGEST" ]; then
-        set -- "$@" -d "$EXPORT_DIGEST"
-    fi
-    run_astrbot "$@"
-    ;;
-
-import)
-    shift
-    instance=""
-    backup_file=""
-    IMPORT_YES=0
-
-    while [ "$#" -gt 0 ]; do
-        case "$1" in
-        -y | --yes)
-            IMPORT_YES=1
-            shift
-            ;;
-        -h | --help)
-            echo "Usage: astrbotctl import [-y] <name> <backup_file>"
-            exit 0
-            ;;
-        -*)
-            echo "❌ Error: Unknown option: $1"
-            exit 1
-            ;;
-        *)
-            if [ -z "$instance" ]; then
-                instance="$1"
-            elif [ -z "$backup_file" ]; then
-                backup_file="$1"
-            else
-                echo "❌ Error: Unexpected extra argument: $1"
-                exit 1
-            fi
-            shift
-            ;;
-        esac
-    done
-
+rm)
+    require_root
     require_instance
 
-    if [ -z "$backup_file" ]; then
-        echo "❌ Error: Missing backup file."
-        exit 1
-    fi
+    systemctl stop "astrbot@$instance" 2>/dev/null || true
+    systemctl disable "astrbot@$instance" 2>/dev/null || true
 
-    if [ ! -f "$backup_file" ]; then
-        echo "❌ Error: Backup file not found: $backup_file"
-        exit 1
-    fi
+    rm -rf "$SYSTEM_ROOT/$instance"
+    rm -f "$(conf_file)"
+    rm -rf "$(venv_dir)"
 
-    load_instance_config
-
-    if [ ! -d "$ASTRBOT_ROOT" ]; then
-        echo "❌ Error: Instance directory $ASTRBOT_ROOT does not exist."
-        exit 1
-    fi
-
-    if [ "$IMPORT_YES" -eq 1 ]; then
-        run_astrbot bk import -y "$backup_file"
-    else
-        run_astrbot bk import "$backup_file"
-    fi
+    echo "✅ removed"
     ;;
 
 list)
-    echo "=== AstrBot Instances ==="
-    if [ -d "$SYSTEM_ROOT" ]; then
-        # List subdirectories in /var/lib/astrbot
-        ls -1 "$SYSTEM_ROOT" 2>/dev/null || echo "(No instances found)"
-    else
-        echo "(No instances found)"
-    fi
+    ls -1 "$SYSTEM_ROOT" 2>/dev/null || true
+    ;;
+
+start | stop | restart | status)
+    require_instance
+    systemctl "$cmd" "astrbot@$instance"
     ;;
 
 git)
     require_root
 
-    if [ -z "$2" ] || [ "$2" = "-h" ] || [ "$2" = "--help" ]; then
-        echo "Usage: sudo astrbotctl git pull [--sync] [instance|--all]"
-        echo "       sudo astrbotctl git pull --rebuild-venv [instance|--all]"
-        exit 0
-    fi
+    git -C "$APP_DIR" init 2>/dev/null || true
+    git -C "$APP_DIR" remote add origin "$UPSTREAM_URL" 2>/dev/null || true
 
-    case "$2" in
-    pull)
-        shift 2
-        GIT_SYNC=0
-        GIT_REBUILD_VENV=0
-        GIT_TARGET=""
-        GIT_ALL=0
+    git -C "$APP_DIR" fetch --depth=1 origin "$UPSTREAM_BRANCH"
+    git -C "$APP_DIR" checkout -f "$UPSTREAM_BRANCH"
 
-        while [ "$#" -gt 0 ]; do
-            case "$1" in
-            --sync)
-                GIT_SYNC=1
-                shift
-                ;;
-            --rebuild-venv)
-                GIT_SYNC=1
-                GIT_REBUILD_VENV=1
-                shift
-                ;;
-            --all)
-                GIT_ALL=1
-                shift
-                ;;
-            -h | --help)
-                echo "Usage: sudo astrbotctl git pull [--sync] [instance|--all]"
-                echo "       sudo astrbotctl git pull --rebuild-venv [instance|--all]"
-                exit 0
-                ;;
-            -*)
-                echo "❌ Error: Unknown option: $1"
-                exit 1
-                ;;
-            *)
-                if [ -n "$GIT_TARGET" ]; then
-                    echo "❌ Error: Unexpected extra argument: $1"
-                    exit 1
-                fi
-                GIT_TARGET="$1"
-                shift
-                ;;
-            esac
-        done
-
-        if [ "$GIT_ALL" -eq 1 ] && [ -n "$GIT_TARGET" ]; then
-            echo "❌ Error: Use either an instance name or --all, not both."
-            exit 1
-        fi
-
-        if [ "$GIT_REBUILD_VENV" -eq 1 ] && [ "$GIT_ALL" -eq 0 ] && [ -z "$GIT_TARGET" ]; then
-            echo "❌ Error: --rebuild-venv requires an instance name or --all."
-            exit 1
-        fi
-
-        if ! command -v git >/dev/null 2>&1; then
-            echo "❌ Error: git is not installed."
-            exit 1
-        fi
-
-        update_app_git_checkout
-
-        if [ "$GIT_SYNC" -eq 1 ]; then
-            if [ "$GIT_ALL" -eq 1 ] || [ -z "$GIT_TARGET" ]; then
-                TARGETS="$(iter_instances)"
-                if [ -z "$TARGETS" ]; then
-                    echo ">>> No AstrBot instances found. Skipping environment sync."
-                    exit 0
-                fi
-            else
-                TARGETS="$GIT_TARGET"
-            fi
-
-            for target_instance in $TARGETS; do
-                instance="$target_instance"
-                load_instance_config
-
-                if [ ! -d "$ASTRBOT_ROOT" ]; then
-                    echo "❌ Error: Instance directory $ASTRBOT_ROOT does not exist."
-                    exit 1
-                fi
-
-                if [ "$GIT_REBUILD_VENV" -eq 1 ]; then
-                    echo ">>> Rebuilding virtual environment for instance: $instance"
-                    rm -rf "$CACHE_DIR/venv-$instance"
-                fi
-
-                ensure_instance_env_synced
-            done
-        fi
-        ;;
-    *)
-        echo "❌ Error: Unknown git subcommand: $2"
-        echo "Usage: sudo astrbotctl git pull [--sync] [instance|--all]"
-        exit 1
-        ;;
-    esac
+    echo "✅ updated"
     ;;
 
 *)
-    print_help
-    exit 1
+    echo "Usage:"
+    echo "  astrbotctl init <name>"
+    echo "  astrbotctl run <name>"
+    echo "  astrbotctl rm <name>"
+    echo "  astrbotctl list"
+    echo "  astrbotctl start|stop|status <name>"
     ;;
 esac

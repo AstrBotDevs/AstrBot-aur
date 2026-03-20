@@ -1,20 +1,154 @@
 # AstrBot Instance Configuration: ${INSTANCE_NAME}
+#
+# This file is a template for environment variables used by AstrBot.
+# Copy or populate this file as needed (for example, into /etc/astrbot/<instance>/.env
+# or into a systemd service unit environment file). Variables set here override
+# application defaults.
+#
+# Notes:
+#  - Paths that contain spaces should be quoted.
+#  - Boolean-like values are stored as strings (True/False or 1/0) for portability.
+#  - If you change ASTRBOT_ROOT to a location outside /var/lib/astrbot, update
+#    systemd ReadWritePaths for the corresponding service instance.
+#
+# Replace ${INSTANCE_NAME}, ${PORT}, ${ASTRBOT_ROOT} with concrete values when
+# instantiating the template (or let your provisioning tool render them).
 
-# --- Network ---
+# ------------------------------------------
+# Instance identity
+# ------------------------------------------
+# Human-readable name for this instance (used in logs/service names)
+INSTANCE_NAME="${INSTANCE_NAME:-astrbot}"
+
+# ------------------------------------------
+# Network (core)
+# ------------------------------------------
 # Host to bind to (0.0.0.0 for all interfaces, 127.0.0.1 for local only)
-HOST=0.0.0.0
-PORT=${PORT}
+HOST="${HOST:-0.0.0.0}"
+# Port to bind the core HTTP API (if applicable)
+PORT="${PORT:-8000}"
 
-# --- Storage ---
-# Default Data Directory: ${ASTRBOT_ROOT}
-# You can change this, but ensure the 'astrbot' user has ReadWrite permissions.
-# NOTE: If you change this to a path outside /var/lib/astrbot, you MUST override
-# systemd hardening by running: systemctl edit astrbot@${INSTANCE_NAME}
-# and adding:
-#   [Service]
-#   ReadWritePaths=/your/custom/path
-ASTRBOT_ROOT="${ASTRBOT_ROOT}"
+# ------------------------------------------
+# Storage
+# ------------------------------------------
+# Default Data Directory
+ASTRBOT_ROOT="${ASTRBOT_ROOT:-/var/lib/astrbot/${INSTANCE_NAME}}"
+# Ensure the system/service user (usually 'astrbot') has read/write permissions.
 
-# --- Advanced ---
-# Extra arguments to pass to astrbot core
-# EXTRA_ARGS=""
+# ------------------------------------------
+# Core runtime / debugging
+# ------------------------------------------
+# 日志等级。可选值：DEBUG, INFO, WARNING, ERROR, CRITICAL。默认：INFO。
+ASTRBOT_LOG_LEVEL="${ASTRBOT_LOG_LEVEL:-INFO}"
+
+# 启用插件热重载。设置为 "1" 启用（开发时有用）。
+ASTRBOT_RELOAD="${ASTRBOT_RELOAD:-0}"
+
+# 禁用统计（上报匿名使用数据）。设置为 "1" 禁用。
+ASTRBOT_DISABLE_METRICS="${ASTRBOT_DISABLE_METRICS:-0}"
+
+# 覆盖 Python 可执行文件路径（用于本地代码执行功能）。
+PYTHON="${PYTHON:-/usr/bin/python3}"
+
+# 启用演示模式（可能限制部分功能）。
+DEMO_MODE="${DEMO_MODE:-False}"
+
+# 启用测试模式（影响日志和部分行为）。
+TESTING="${TESTING:-False}"
+
+# 标记：是否通过桌面客户端执行（主要用于内部）。
+ASTRBOT_DESKTOP_CLIENT="${ASTRBOT_DESKTOP_CLIENT:-0}"
+
+# 标记：是否通过 systemd 服务执行。
+ASTRBOT_SYSTEMD="${ASTRBOT_SYSTEMD:-0}"
+
+# ------------------------------------------
+# Web 管理面板 (Dashboard) / API
+# ------------------------------------------
+# 启用或禁用 WebUI 管理面板。默认：True。
+ASTRBOT_DASHBOARD_ENABLE="${ASTRBOT_DASHBOARD_ENABLE:-True}"
+
+# API 绑定主机（默认使用 HOST）
+ASTRBOT_HOST="${ASTRBOT_HOST:-${HOST}}"
+
+# API 绑定端口（默认：6185）
+ASTRBOT_PORT="${ASTRBOT_PORT:-6185}"
+
+# 是否为 API 启用 SSL（true/false）
+ASTRBOT_SSL_ENABLE="${ASTRBOT_SSL_ENABLE:-false}"
+
+# API SSL 证书路径（PEM 格式）
+ASTRBOT_SSL_CERT="${ASTRBOT_SSL_CERT:-}"
+
+# API SSL 私钥路径（PEM 格式）
+ASTRBOT_SSL_KEY="${ASTRBOT_SSL_KEY:-}"
+
+# API SSL CA 证书链路径（可选）
+ASTRBOT_SSL_CA_CERTS="${ASTRBOT_SSL_CA_CERTS:-}"
+
+# ------------------------------------------
+# Network proxy
+# ------------------------------------------
+# HTTP/HTTPS 代理 URL（例如：http://127.0.0.1:7890）。
+http_proxy="${http_proxy:-}"
+https_proxy="${https_proxy:-}"
+
+# 不走代理的主机列表（逗号分隔）。
+no_proxy="${no_proxy:-localhost,127.0.0.1}"
+
+# Note:
+# - The application and some bundled tools honor the lowercase env vars (http_proxy,
+#   https_proxy). Some libraries expect uppercase (HTTP_PROXY). If you rely on
+#   third-party binaries, consider setting both.
+
+# ------------------------------------------
+# Third-party integrations
+# ------------------------------------------
+# Alibaba DashScope API Key（用于 Rerank 服务）。
+DASHSCOPE_API_KEY="${DASHSCOPE_API_KEY:-}"
+
+# Coze 集成（示例）
+COZE_API_KEY="${COZE_API_KEY:-}"
+COZE_BOT_ID="${COZE_BOT_ID:-}"
+
+# 计算机控制相关的数据目录（用于截图/文件存储）。
+BAY_DATA_DIR="${BAY_DATA_DIR:-${ASTRBOT_ROOT}/bay_data}"
+
+# 平台特定配置（例如 QQ 测试模式）
+TEST_MODE="${TEST_MODE:-off}"
+
+# ------------------------------------------
+# Advanced / Extra
+# ------------------------------------------
+# Extra arguments to pass to astrbot core (kept as a single string)
+EXTRA_ARGS="${EXTRA_ARGS:-}"
+
+# Additional environment hint for debugging/provisioning
+# LOG_DIR can be used by init scripts to redirect logs
+LOG_DIR="${LOG_DIR:-${ASTRBOT_ROOT}/logs}"
+
+# ------------------------------------------
+# Examples / Overrides (uncomment and edit to enable)
+# ------------------------------------------
+# Example: enable SSL for the dashboard/API
+# ASTRBOT_SSL_ENABLE=true
+# ASTRBOT_SSL_CERT="/etc/ssl/astrbot/cert.pem"
+# ASTRBOT_SSL_KEY="/etc/ssl/astrbot/key.pem"
+#
+# Example: change data root
+# ASTRBOT_ROOT="/var/lib/astrbot/instance-01"
+#
+# Example: run dashboard on a different port
+# ASTRBOT_PORT=6186
+#
+# Example: enable developer reload
+# ASTRBOT_RELOAD=1
+
+# ------------------------------------------
+# Security & Notes
+# ------------------------------------------
+# - Do not commit secrets (API keys, private keys) into version control.
+# - Prefer storing sensitive values in a secrets manager or provision them at runtime.
+# - This template intentionally leaves most integration keys empty.
+
+# End of template
