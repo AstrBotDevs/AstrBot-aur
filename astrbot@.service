@@ -21,13 +21,9 @@ Environment="UV_CACHE_DIR=/var/cache/astrbot/uv"
 Environment="UV_PYTHON_INSTALL_DIR=/var/cache/astrbot/python"
 Environment="UV_PROJECT_ENVIRONMENT=/var/cache/astrbot/venv-%i"
 
-# Instance Configuration
-EnvironmentFile=-/etc/astrbot/%i.conf
-
 # Working directory
-# We set this to the instance data directory for safety,
-# though astrbotctl will cd to /opt/astrbot to find the project.
-WorkingDirectory=/var/lib/astrbot/%i/home
+# The instance root is created by `astrbotctl init`; `home/` may not exist yet.
+WorkingDirectory=/var/lib/astrbot/%i
 
 # Execution
 # The wrapper script handles env setup and cd to /opt/astrbot
@@ -42,9 +38,9 @@ PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only
 
-# Allow write access to necessary directories
-# We use specific paths to prevent instances from modifying each other's data.
-ReadWritePaths=/var/lib/astrbot/%i/home /var/cache/astrbot/venv-%i /var/cache/astrbot/uv /var/cache/astrbot/python
+# Allow write access to necessary directories.
+# AstrBot writes under the instance root (`data/`, `home/`, logs, locks) and shared uv caches.
+ReadWritePaths=/var/lib/astrbot/%i /var/cache/astrbot/venv-%i /var/cache/astrbot/uv /var/cache/astrbot/python
 
 
 [Install]

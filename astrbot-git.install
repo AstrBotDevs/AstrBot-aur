@@ -38,9 +38,9 @@ pre_install() {
             [ -d "$user_home/.local/share/uv/tools/astrbot" ]; then
             echo ""
             echo "============== ❌ 检测到 uv tool 安装的 astrbot =============="
-            echo "请先卸载："
+            echo "卸载："
             echo "   uv tool uninstall astrbot"
-            echo ""
+            echo "安装将继续进行"
             echo "数据迁移："
             echo "   将 data 目录移动至 /var/lib/astrbot/<实例名>"
             echo "============================================================="
@@ -112,6 +112,7 @@ post_upgrade() {
     echo "  数据目录： /var/lib/astrbot/<实例名>"
     echo "  配置文件： /etc/astrbot/<实例名>.conf"
     echo "  服务日志： journalctl -u astrbot@<实例名> -f"
+    echo "  代码问题：sudo astrbotctl git pull --sync"
 }
 
 post_remove() {

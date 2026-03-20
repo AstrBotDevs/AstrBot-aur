@@ -13,3 +13,5 @@
 astrbot-git
 data
 *.lock
+
+tmp

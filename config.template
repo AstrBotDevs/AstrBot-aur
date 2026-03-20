@@ -1,9 +1,9 @@
 # AstrBot Instance Configuration: ${INSTANCE_NAME}
 #
 # This file is a template for environment variables used by AstrBot.
-# Copy or populate this file as needed (for example, into /etc/astrbot/<instance>/.env
-# or into a systemd service unit environment file). Variables set here override
-# application defaults.
+# Copy or populate this file as needed (for example, into /etc/astrbot/<instance>.conf
+# for `astrbotctl`, or into ASTRBOT_ROOT/.env). Variables set here override
+# application defaults after `astrbotctl` or dotenv-style loading.
 #
 # Notes:
 #  - Paths that contain spaces should be quoted.
@@ -120,9 +120,6 @@ TEST_MODE="${TEST_MODE:-off}"
 # ------------------------------------------
 # Advanced / Extra
 # ------------------------------------------
-# Extra arguments to pass to astrbot core (kept as a single string)
-EXTRA_ARGS="${EXTRA_ARGS:-}"
-
 # Additional environment hint for debugging/provisioning
 # LOG_DIR can be used by init scripts to redirect logs
 LOG_DIR="${LOG_DIR:-${ASTRBOT_ROOT}/logs}"
