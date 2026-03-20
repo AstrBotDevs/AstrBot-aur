@@ -504,11 +504,17 @@ handle_certbot_deploy() {
 }
 
 iter_instances() {
-    if [ ! -d "$SYSTEM_ROOT" ]; then
+    if [ ! -d "$CONFIG_DIR" ]; then
         return 0
     fi
 
-    find "$SYSTEM_ROOT" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort
+    for conf in "$CONFIG_DIR"/*.conf; do
+        [ -e "$conf" ] || continue
+        instance_name="$(basename "$conf" .conf)"
+        if [ -d "$SYSTEM_ROOT/$instance_name" ]; then
+            printf '%s\n' "$instance_name"
+        fi
+    done | sort -u
 }
 
 ensure_app_git_repo() {
@@ -1222,9 +1228,9 @@ import)
 
 list)
     echo "=== AstrBot Instances ==="
-    if [ -d "$SYSTEM_ROOT" ]; then
-        # List subdirectories in /var/lib/astrbot
-        ls -1 "$SYSTEM_ROOT" 2>/dev/null || echo "(No instances found)"
+    INSTANCES="$(iter_instances)"
+    if [ -n "$INSTANCES" ]; then
+        printf '%s\n' "$INSTANCES"
     else
         echo "(No instances found)"
     fi
