@@ -15,10 +15,10 @@ echo "更新版本号 (pkgver)..."
 makepkg -od
 
 echo "同步 .SRCINFO..."
-makepkg --printsrcinfo > .SRCINFO
+makepkg --printsrcinfo >.SRCINFO
 
 echo "提交更改并推送至 AUR..."
-git add PKGBUILD .SRCINFO .gitignore *.install astrbotctl astrbot@.service config.template
+git add .
 
 # 获取最新生成的版本号作为 commit message
 NEW_VER=$(grep -m1 "pkgver =" .SRCINFO | cut -d' ' -f3)
