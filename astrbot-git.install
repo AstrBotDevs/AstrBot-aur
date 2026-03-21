@@ -113,7 +113,6 @@ post_upgrade() {
     echo "  配置文件： /etc/astrbot/<实例名>.conf"
     echo "  服务日志： journalctl -u astrbot@<实例名> -f"
     echo "  代码问题：sudo astrbotctl git pull --sync"
-    echo "  访问dashboard：https://astrbotdevs.github.io/astrbot-aur"
     echo "  访问：https://dash.astrbot.men"
     echo "  下载前端文件：https://download.astrbot.men/"
 }
