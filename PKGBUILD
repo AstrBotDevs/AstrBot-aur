@@ -26,10 +26,9 @@ sha256sums=('SKIP' 'SKIP' 'SKIP')
 install=astrbot-git.install
 
 prepare() {
-    local _mirror="/var/cache/astrbot/astrbot-git"
+    local _mirror="$srcdir/astrbot-git"
 
     if [ ! -d "$_mirror" ]; then
-        install -d -m755 "$_mirror"
         git clone --bare --mirror https://github.com/AstrBotDevs/AstrBot.git "$_mirror"
     fi
 
