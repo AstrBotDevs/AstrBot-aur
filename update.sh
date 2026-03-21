@@ -29,13 +29,25 @@ NEW_VER=$(awk '$1 == "pkgver" && $2 == "=" { print $3; exit }' "$TMP_SRCINFO")
     exit 1
 }
 
+OLD_VER=$(awk -F= '/^pkgver=/{gsub(/'\''|"/, "", $2); print $2; exit}' PKGBUILD)
+OLD_PKGREL=$(awk -F= '/^pkgrel=/{gsub(/'\''|"/, "", $2); print $2; exit}' PKGBUILD)
+
+if [ "$NEW_VER" != "$OLD_VER" ]; then
+    echo "检测到新版本，重置 pkgrel..."
+    NEW_PKGREL=1
+else
+    echo "版本未变，递增 pkgrel..."
+    NEW_PKGREL=$((OLD_PKGREL + 1))
+fi
+
 echo "同步 PKGBUILD 和 .SRCINFO..."
 sed -i "s/^pkgver=.*/pkgver=${NEW_VER}/" PKGBUILD
+sed -i "s/^pkgrel=.*/pkgrel=${NEW_PKGREL}/" PKGBUILD
 makepkg --printsrcinfo >.SRCINFO
 
 echo "提交更改并推送至 AUR 和GITHUB镜像..."
 git add .
-git commit -m "update to version $NEW_VER" || echo "⚠️ 没有检测到更改，跳过提交"
+git commit -m "update to version $NEW_VER-$NEW_PKGREL" || echo "⚠️ 没有检测到更改，跳过提交"
 git push origin "$BRANCH"
 git push github "$BRANCH"
-echo "--- ✅ 更新完成！当前版本: $NEW_VER ---"
+echo "--- ✅ 更新完成！当前版本: $NEW_VER-$NEW_PKGREL ---"

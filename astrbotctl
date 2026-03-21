@@ -235,6 +235,7 @@ render_config_from_template() {
     INSTANCE_NAME="$instance"
     unset ASTRBOT_HOST ASTRBOT_PORT
     ASTRBOT_ROOT="$SYSTEM_ROOT/$instance"
+    ASTRBOT_HOST="0.0.0.0"
 
     # Auto-assign port
     ASTRBOT_PORT=3000
@@ -246,15 +247,12 @@ render_config_from_template() {
         break
     done
 
-    # Generate config from template
+    # Generate config from template using envsubst
     TMP_CONF="$(mktemp /tmp/astrbot.conf.XXXXXX)"
     trap 'rm -f "$TMP_CONF"' EXIT
 
-    # shellcheck disable=SC2016
-    sed -e 's/${INSTANCE_NAME}/'"$INSTANCE_NAME/g" \
-        -e 's|${ASTRBOT_ROOT}|'"$ASTRBOT_ROOT|g" \
-        -e 's/${ASTRBOT_PORT}/'"$ASTRBOT_PORT/g" \
-        "$TEMPLATE_FILE" >"$TMP_CONF"
+    export INSTANCE_NAME ASTRBOT_HOST ASTRBOT_PORT ASTRBOT_ROOT
+    envsubst <"$TEMPLATE_FILE" >"$TMP_CONF"
 
     install -Dm644 "$TMP_CONF" "$CONF_FILE"
     chown root:root "$CONF_FILE" 2>/dev/null || true
@@ -706,13 +704,8 @@ init)
         exit 1
     fi
 
-    # Use | as delimiter to avoid issues with slashes in paths
-    # shellcheck disable=SC2016
-    sed -e 's|${INSTANCE_NAME}|'"$instance"'|g' \
-        -e 's|${ASTRBOT_HOST}|'"$ASTRBOT_HOST"'|g' \
-        -e 's|${ASTRBOT_PORT}|'"$ASTRBOT_PORT"'|g' \
-        -e 's|${ASTRBOT_ROOT}|'"$ASTRBOT_ROOT"'|g' \
-        "$TEMPLATE_FILE" >"$CONF_FILE"
+    export INSTANCE_NAME ASTRBOT_HOST ASTRBOT_PORT ASTRBOT_ROOT
+    envsubst <"$TEMPLATE_FILE" >"$CONF_FILE"
 
     # Secure the config file
     chmod 644 "$CONF_FILE"
