@@ -138,8 +138,8 @@ Configuration files are located at `/etc/astrbot/<instance>.conf`.
 # /etc/astrbot/bot1.conf
 
 # Network
-HOST=0.0.0.0
-PORT=3000
+ASTRBOT_HOST=0.0.0.0
+ASTRBOT_PORT=3000
 
 # Storage
 ASTRBOT_ROOT="/var/lib/astrbot/bot1"
@@ -327,8 +327,8 @@ paru -S astrbot-git
 # /etc/astrbot/bot1.conf
 
 # 网络
-HOST=0.0.0.0
-PORT=3000
+ASTRBOT_HOST=0.0.0.0
+ASTRBOT_PORT=3000
 
 # 存储
 ASTRBOT_ROOT="/var/lib/astrbot/bot1"

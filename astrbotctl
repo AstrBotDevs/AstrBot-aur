@@ -158,8 +158,6 @@ run_astrbot_env_cmd() {
             ASTRBOT_SYSTEMD="$ASTRBOT_SYSTEMD" \
             ASTRBOT_DESKTOP_CLIENT="$ASTRBOT_DESKTOP_CLIENT" \
             ASTRBOT_ROOT="${ASTRBOT_ROOT:-}" \
-            HOST="${HOST:-}" \
-            PORT="${PORT:-}" \
             ASTRBOT_HOST="${ASTRBOT_HOST:-}" \
             ASTRBOT_PORT="${ASTRBOT_PORT:-}" \
             ASTRBOT_DASHBOARD_ENABLE="${ASTRBOT_DASHBOARD_ENABLE:-}" \
@@ -236,26 +234,26 @@ render_config_from_template() {
 
     load_instance_config
 
-    EXISTING_PORT="${ASTRBOT_PORT:-${PORT:-}}"
-    EXISTING_HOST="${ASTRBOT_HOST:-${HOST:-}}"
+    EXISTING_PORT="${ASTRBOT_PORT:-}"
+    EXISTING_HOST="${ASTRBOT_HOST:-}"
     EXISTING_ROOT="${ASTRBOT_ROOT:-}"
 
     INSTANCE_NAME="$instance"
     ASTRBOT_ROOT="${EXISTING_ROOT:-$SYSTEM_ROOT/$instance}"
-    HOST="${EXISTING_HOST:-0.0.0.0}"
+    ASTRBOT_HOST="${EXISTING_HOST:-0.0.0.0}"
 
     if [ -n "$EXISTING_PORT" ]; then
-        PORT="$EXISTING_PORT"
+        ASTRBOT_PORT="$EXISTING_PORT"
     else
-        PORT=3000
+        ASTRBOT_PORT=3000
         while :; do
-            if grep -q "^PORT=$PORT$" "$CONFIG_DIR"/*.conf 2>/dev/null; then
-                PORT=$((PORT + 1))
+            if grep -q "^ASTRBOT_PORT=$ASTRBOT_PORT$" "$CONFIG_DIR"/*.conf 2>/dev/null; then
+                ASTRBOT_PORT=$((ASTRBOT_PORT + 1))
                 continue
             fi
 
-            if ss -lntH 2>/dev/null | awk '{print $4}' | grep -q ":$PORT$"; then
-                PORT=$((PORT + 1))
+            if ss -lntH 2>/dev/null | awk '{print $4}' | grep -q ":$ASTRBOT_PORT$"; then
+                ASTRBOT_PORT=$((ASTRBOT_PORT + 1))
                 continue
             fi
 
@@ -268,9 +266,9 @@ render_config_from_template() {
 
     sed -E \
         -e "s/\\$\\{INSTANCE_NAME(:-[^}]*)?\\}/$INSTANCE_NAME/g" \
-        -e "s/\\$\\{PORT(:-[^}]*)?\\}/$PORT/g" \
+        -e "s/\\$\\{ASTRBOT_HOST(:-[^}]*)?\\}/$ASTRBOT_HOST/g" \
+        -e "s/\\$\\{ASTRBOT_PORT(:-[^}]*)?\\}/$ASTRBOT_PORT/g" \
         -e "s/\\$\\{ASTRBOT_ROOT(:-[^}]*)?\\}/$ASTRBOT_ROOT/g" \
-        -e "s/\\$\\{HOST(:-[^}]*)?\\}/$HOST/g" \
         "$TEMPLATE_FILE" >"$TMP_CONF"
 
     {
@@ -286,7 +284,7 @@ render_config_from_template() {
     rm -f "$TMP_CONF" "${TMP_CONF}.hdr"
     trap - EXIT
 
-    echo "✅ Config reset to template: $CONF_FILE (PORT=$PORT, HOST=$HOST, ASTRBOT_ROOT=$ASTRBOT_ROOT)"
+    echo "✅ Config reset to template: $CONF_FILE (ASTRBOT_PORT=$ASTRBOT_PORT, ASTRBOT_HOST=$ASTRBOT_HOST, ASTRBOT_ROOT=$ASTRBOT_ROOT)"
     return 0
 }
 
@@ -318,8 +316,8 @@ print_paths() {
     echo "LOG_DIR=$LOG_DIR_VALUE"
     echo "APP_DIR=$APP_DIR"
     echo "SYSTEMD_UNIT=astrbot@${instance}.service"
-    echo "HOST=${HOST:-${ASTRBOT_HOST:-}}"
-    echo "PORT=${PORT:-${ASTRBOT_PORT:-}}"
+    echo "ASTRBOT_HOST=${ASTRBOT_HOST:-}"
+    echo "ASTRBOT_PORT=${ASTRBOT_PORT:-}"
     if [ -n "${ASTRBOT_DASHBOARD_ENABLE:-}" ]; then
         echo "ASTRBOT_DASHBOARD_ENABLE=$ASTRBOT_DASHBOARD_ENABLE"
     fi
@@ -564,8 +562,6 @@ run_astrbot() {
             ASTRBOT_SYSTEMD="$ASTRBOT_SYSTEMD" \
             ASTRBOT_DESKTOP_CLIENT="$ASTRBOT_DESKTOP_CLIENT" \
             ASTRBOT_ROOT="${ASTRBOT_ROOT:-}" \
-            HOST="${HOST:-}" \
-            PORT="${PORT:-}" \
             ASTRBOT_HOST="${ASTRBOT_HOST:-}" \
             ASTRBOT_PORT="${ASTRBOT_PORT:-}" \
             ASTRBOT_DASHBOARD_ENABLE="${ASTRBOT_DASHBOARD_ENABLE:-}" \
@@ -706,18 +702,18 @@ init)
     # Intelligent port allocation logic
     # 1. Collect ports used in existing config files
     # 2. Check active ports via ss
-    PORT=3000
+    ASTRBOT_PORT=3000
 
     while :; do
         # Check if port is already configured in another instance
-        if grep -q "^PORT=$PORT$" "$CONFIG_DIR"/*.conf 2>/dev/null; then
-            PORT=$((PORT + 1))
+        if grep -q "^ASTRBOT_PORT=$ASTRBOT_PORT$" "$CONFIG_DIR"/*.conf 2>/dev/null; then
+            ASTRBOT_PORT=$((ASTRBOT_PORT + 1))
             continue
         fi
 
         # Check if active port is listening (occupied by running instance or other process)
-        if ss -lntH | awk '{print $4}' | grep -q ":$PORT$"; then
-            PORT=$((PORT + 1))
+        if ss -lntH | awk '{print $4}' | grep -q ":$ASTRBOT_PORT$"; then
+            ASTRBOT_PORT=$((ASTRBOT_PORT + 1))
             continue
         fi
 
@@ -736,7 +732,8 @@ init)
     # Use | as delimiter to avoid issues with slashes in paths
     # shellcheck disable=SC2016
     sed -e 's|${INSTANCE_NAME}|'"$instance"'|g' \
-        -e 's|${PORT}|'"$PORT"'|g' \
+        -e 's|${ASTRBOT_HOST}|'"$ASTRBOT_HOST"'|g' \
+        -e 's|${ASTRBOT_PORT}|'"$ASTRBOT_PORT"'|g' \
         -e 's|${ASTRBOT_ROOT}|'"$ASTRBOT_ROOT"'|g' \
         "$TEMPLATE_FILE" >"$CONF_FILE"
 
@@ -766,7 +763,7 @@ init)
     echo "✅ Instance initialized."
     echo "   Data Directory: $ASTRBOT_ROOT"
     echo "   Configuration:  $CONF_FILE"
-    echo "   Port:           $PORT"
+    echo "   Port:           $ASTRBOT_PORT"
     echo ""
     echo "To start the instance:"
     echo "   systemctl start astrbot@$instance"
@@ -812,17 +809,18 @@ cp)
     chown -R astrbot:astrbot "$DEST_ROOT"
 
     # Find new port (reuse logic from init)
-    PORT=3000
+    ASTRBOT_PORT=3000
     while :; do
-        if grep -q "^PORT=$PORT$" "$CONFIG_DIR"/*.conf 2>/dev/null; then
-            PORT=$((PORT + 1))
+        if grep -q "^ASTRBOT_PORT=$ASTRBOT_PORT$" "$CONFIG_DIR"/*.conf 2>/dev/null; then
+            ASTRBOT_PORT=$((ASTRBOT_PORT + 1))
             continue
         fi
 
-        if ss -lntH | awk '{print $4}' | grep -q ":$PORT$"; then
-            PORT=$((PORT + 1))
+        if ss -lntH | awk '{print $4}' | grep -q ":$ASTRBOT_PORT$"; then
+            ASTRBOT_PORT=$((ASTRBOT_PORT + 1))
             continue
         fi
+
         break
     done
 
@@ -837,7 +835,8 @@ cp)
 
     # shellcheck disable=SC2016
     sed -e 's|${INSTANCE_NAME}|'"$DEST_INSTANCE"'|g' \
-        -e 's|${PORT}|'"$PORT"'|g' \
+        -e 's|${ASTRBOT_HOST}|'"$ASTRBOT_HOST"'|g' \
+        -e 's|${ASTRBOT_PORT}|'"$ASTRBOT_PORT"'|g' \
         -e 's|${ASTRBOT_ROOT}|'"$DEST_ROOT"'|g' \
         "$TEMPLATE_FILE" >"$DEST_CONF"
 
@@ -846,7 +845,7 @@ cp)
     echo "✅ Instance copied."
     echo "   Source: $SRC_INSTANCE"
     echo "   Dest:   $DEST_INSTANCE"
-    echo "   Port:   $PORT"
+    echo "   Port:   $ASTRBOT_PORT"
     echo ""
     echo "To start the new instance:"
     echo "   systemctl start astrbot@$DEST_INSTANCE"
@@ -969,8 +968,8 @@ run)
 
     shift 2
 
-    RUN_HOST="${HOST:-${ASTRBOT_HOST:-0.0.0.0}}"
-    RUN_PORT="${PORT:-${ASTRBOT_PORT:-}}"
+    RUN_HOST="${ASTRBOT_HOST:-0.0.0.0}"
+    RUN_PORT="${ASTRBOT_PORT:-}"
 
     echo ">>> Starting AstrBot instance: $instance"
     echo ">>> Host: $RUN_HOST"

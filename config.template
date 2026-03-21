@@ -21,14 +21,6 @@
 INSTANCE_NAME="${INSTANCE_NAME:-astrbot}"
 
 # ------------------------------------------
-# Network (core)
-# ------------------------------------------
-# Host to bind to (0.0.0.0 for all interfaces, 127.0.0.1 for local only)
-HOST="${HOST:-0.0.0.0}"
-# Port to bind the core HTTP API (if applicable)
-PORT="${PORT:-8000}"
-
-# ------------------------------------------
 # Storage
 # ------------------------------------------
 # Default Data Directory
@@ -68,14 +60,16 @@ ASTRBOT_SYSTEMD="${ASTRBOT_SYSTEMD:-0}"
 # 启用或禁用 WebUI 管理面板。默认：True。
 ASTRBOT_DASHBOARD_ENABLE="${ASTRBOT_DASHBOARD_ENABLE:-True}"
 
-# API 绑定主机（默认使用 HOST）
-ASTRBOT_HOST="${ASTRBOT_HOST:-${HOST}}"
+# API 绑定主机
+ASTRBOT_HOST="${ASTRBOT_HOST:-0.0.0.0}"
 
 # API 绑定端口（默认：6185）
 ASTRBOT_PORT="${ASTRBOT_PORT:-6185}"
 
 # 是否为 API 启用 SSL（true/false）
 ASTRBOT_SSL_ENABLE="${ASTRBOT_SSL_ENABLE:-false}"
+
+# 以下配置不建议手动修改，建议使用astrbotctl certbot xxx 命令快速配置
 
 # API SSL 证书路径（PEM 格式）
 ASTRBOT_SSL_CERT="${ASTRBOT_SSL_CERT:-}"
