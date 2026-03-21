@@ -2,7 +2,7 @@
 
 pkgname=astrbot-git
 _pkgname=astrbot
-pkgver=0.0.0.r1.g43e1070
+pkgver=4.20.1.r223.g43e107068
 pkgrel=1
 pkgdesc="Agentic IM Chatbot infrastructure (multi-instance, astrbotctl only)"
 arch=('any')
@@ -26,8 +26,9 @@ sha256sums=('SKIP' 'SKIP' 'SKIP')
 install=astrbot-git.install
 
 prepare() {
-    msg2 "Shallow cloning AstrBot repository..."
-    git clone --depth=1 --branch=dev \
+    msg2 "Cloning AstrBot repository..."
+    # Use depth=500 to capture enough tag history for version calculation
+    git clone --depth=500 --branch=dev \
         "https://github.com/AstrBotDevs/AstrBot.git" \
         "$srcdir/$_pkgname"
 }
@@ -35,14 +36,9 @@ prepare() {
 pkgver() {
     cd "$srcdir/$_pkgname"
     local _ver
-    _ver=$(git describe --long --tags 2>/dev/null) ||
-        _ver=""
-    if [ -z "$_ver" ]; then
-        # Shallow clone fallback: use commit count and hash
-        echo "0.0.0.r$(git rev-list --count HEAD).g$(git rev-parse --short HEAD)"
-    else
+    _ver=$(git describe --long --tags 2>/dev/null) && {
         echo "$_ver" | sed 's/\([^-]*-g\)/r\1/;s/-/./g' | sed 's/^v//g'
-    fi
+    } || echo "0.0.0.r$(git rev-list --count HEAD).g$(git rev-parse --short HEAD)"
 }
 
 package() {
