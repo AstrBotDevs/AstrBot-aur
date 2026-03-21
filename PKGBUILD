@@ -3,7 +3,7 @@
 pkgname=astrbot-git
 _pkgname=astrbot
 pkgver=4.20.1.r55.g589776a
-pkgrel=1
+pkgrel=5
 pkgdesc="Agentic IM Chatbot infrastructure (multi-instance, astrbotctl only)"
 arch=('any')
 url="https://github.com/AstrBotDevs/AstrBot"
@@ -18,7 +18,7 @@ conflicts=("$_pkgname")
 source=(
     "astrbotctl"
     "astrbot@.service"
-    "config.template"
+    "tmpl.conf"
 )
 
 sha256sums=('SKIP' 'SKIP' 'SKIP')
@@ -53,7 +53,7 @@ package() {
     install -d "$pkgdir$_appdir"
     cp -r astrbot scripts pyproject.toml README.md LICENSE "$pkgdir$_appdir/"
 
-    install -Dm644 "$srcdir/config.template" "$pkgdir$_appdir/config.template"
+    install -Dm644 "$srcdir/tmpl.conf" "$pkgdir/etc/astrbot/tmpl.conf"
 
     install -Dm755 "$srcdir/astrbotctl" \
         "$pkgdir/usr/bin/astrbotctl"
