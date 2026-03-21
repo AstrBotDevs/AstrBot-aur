@@ -26,11 +26,16 @@ sha256sums=('SKIP' 'SKIP' 'SKIP')
 install=astrbot-git.install
 
 prepare() {
-    msg2 "Cloning AstrBot repository..."
-    # Use depth=500 to capture enough tag history for version calculation
-    git clone --depth=500 --branch=dev \
-        "https://github.com/AstrBotDevs/AstrBot.git" \
-        "$srcdir/$_pkgname"
+    local _mirror="/var/cache/astrbot/astrbot-git"
+
+    if [ ! -d "$_mirror" ]; then
+        install -d -m755 "$_mirror"
+        git clone --bare --mirror https://github.com/AstrBotDevs/AstrBot.git "$_mirror"
+    fi
+
+    git -C "$_mirror" fetch --prune origin
+    rm -rf "$srcdir/$_pkgname"
+    git clone --depth=500 "$_mirror" "$srcdir/$_pkgname"
 }
 
 pkgver() {
