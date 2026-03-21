@@ -34,7 +34,7 @@ prepare() {
 
     git -C "$_mirror" fetch --prune origin
     rm -rf "$srcdir/$_pkgname"
-    git clone --depth=500 "$_mirror" "$srcdir/$_pkgname"
+    git clone --depth=500 "file://$_mirror" "$srcdir/$_pkgname"
 }
 
 pkgver() {

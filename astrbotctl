@@ -503,30 +503,30 @@ iter_instances() {
 }
 
 ensure_app_git_repo() {
-    if [ -d "$APP_DIR/.git" ]; then
-        git -C "$APP_DIR" remote set-url origin "$UPSTREAM_URL"
-    else
-        echo ">>> Initializing Git repository in $APP_DIR"
-        install -d -m755 "$APP_DIR"
-        git -C "$APP_DIR" init
-        git -C "$APP_DIR" remote add origin "$UPSTREAM_URL"
+    local _mirror="$CACHE_DIR/astrbot-git"
+
+    if [ ! -d "$_mirror" ]; then
+        echo ">>> Creating local git mirror..."
+        install -d -m755 "$_mirror"
+        git clone --bare --mirror "$UPSTREAM_URL" "$_mirror"
     fi
 
-    git -C "$APP_DIR" config core.sparseCheckout true
-
-    install -d -m755 "$APP_DIR/.git/info"
-    {
-        echo "/*"
-        echo "!/dashboard/"
-    } >"$APP_DIR/.git/info/sparse-checkout"
+    git -C "$_mirror" fetch --prune origin
 }
 
 update_app_git_checkout() {
-    ensure_app_git_repo
+    local _mirror="$CACHE_DIR/astrbot-git"
 
-    echo ">>> Fetching latest AstrBot source from $UPSTREAM_URL ($UPSTREAM_BRANCH)"
-    git -C "$APP_DIR" fetch --depth=1 origin "$UPSTREAM_BRANCH"
-    git -C "$APP_DIR" checkout -f -B "$UPSTREAM_BRANCH" FETCH_HEAD
+    if [ ! -d "$_mirror" ]; then
+        ensure_app_git_repo
+    fi
+
+    echo ">>> Syncing to latest AstrBot..."
+
+    git -C "$_mirror" fetch --prune origin
+
+    rm -rf "$APP_DIR"
+    git clone --depth=500 "file://$_mirror" "$APP_DIR"
 }
 
 run_astrbot() {
