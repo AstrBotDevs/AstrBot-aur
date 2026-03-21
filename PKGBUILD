@@ -3,7 +3,7 @@
 pkgname=astrbot-git
 _pkgname=astrbot
 pkgver=4.20.1.r55.g589776a
-pkgrel=11
+pkgrel=12
 pkgdesc="Agentic IM Chatbot infrastructure (multi-instance, astrbotctl only)"
 arch=('any')
 url="https://github.com/AstrBotDevs/AstrBot"
@@ -35,6 +35,7 @@ prepare() {
     git -C "$_mirror" fetch --prune origin
     rm -rf "$srcdir/$_pkgname"
     git clone --depth=500 "file://$_mirror" "$srcdir/$_pkgname"
+
 }
 
 pkgver() {
@@ -50,20 +51,10 @@ package() {
 
     local _appdir="/opt/$_pkgname"
 
-    # 调试：检查 $srcdir/ 目录内容
-    echo "DEBUG: listing $srcdir/"
-    ls -la "$srcdir/"
-
     install -d "$pkgdir$_appdir"
     cp -r astrbot scripts pyproject.toml README.md LICENSE "$pkgdir$_appdir/"
 
-    # 调试：检查 tmpl.conf 是否存在
-    echo "DEBUG: checking tmpl.conf"
-    ls -la "$srcdir/tmpl.conf" 2>&1 || echo "tmpl.conf not found in srcdir!"
-
-    # 使用 cp 替代 install
-    install -d "$pkgdir/etc/astrbot"
-    cp -v "$srcdir/tmpl.conf" "$pkgdir/etc/astrbot/tmpl.conf"
+    install -Dm644 "$srcdir/tmpl.conf" "$pkgdir/etc/astrbot/tmpl.conf"
 
     install -Dm755 "$srcdir/astrbotctl" \
         "$pkgdir/usr/bin/astrbotctl"
@@ -72,8 +63,4 @@ package() {
         "$pkgdir/usr/lib/systemd/system/astrbot@.service"
 
     install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
-
-    # 调试：验证安装结果
-    echo "DEBUG: installed files in pkgdir"
-    find "$pkgdir/etc" -type f 2>/dev/null
 }
