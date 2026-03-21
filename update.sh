@@ -34,7 +34,7 @@ sed -i "s/^pkgver=.*/pkgver=${NEW_VER}/" PKGBUILD
 makepkg --printsrcinfo >.SRCINFO
 
 echo "提交更改并推送至 AUR 和GITHUB镜像..."
-git add PKGBUILD .SRCINFO
+git add .
 git commit -m "update to version $NEW_VER" || echo "⚠️ 没有检测到更改，跳过提交"
 git push origin "$BRANCH"
 git push github "$BRANCH"

@@ -216,14 +216,12 @@ ensure_instance_env_synced() {
 
 render_config_from_template() {
     CONF_FILE="$(conf_file)"
-    TEMPLATE_FILE="$APP_DIR/config.template"
+    TEMPLATE_FILE="/etc/astrbot/tmpl.conf"
 
     if [ ! -f "$TEMPLATE_FILE" ]; then
         SCRIPT_DIR="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd || printf "%s" ".")"
-        if [ -f "$SCRIPT_DIR/../config.template" ]; then
-            TEMPLATE_FILE="$SCRIPT_DIR/../config.template"
-        elif [ -f "$SCRIPT_DIR/config.template" ]; then
-            TEMPLATE_FILE="$SCRIPT_DIR/config.template"
+        if [ -f "$SCRIPT_DIR/tmpl.conf" ]; then
+            TEMPLATE_FILE="$SCRIPT_DIR/tmpl.conf"
         fi
     fi
 
@@ -235,44 +233,36 @@ render_config_from_template() {
     load_instance_config
 
     INSTANCE_NAME="$instance"
-    ASTRBOT_ROOT="${ASTRBOT_ROOT:-$SYSTEM_ROOT/$instance}"
+    unset ASTRBOT_HOST ASTRBOT_PORT
+    ASTRBOT_ROOT="$SYSTEM_ROOT/$instance"
 
-    # Auto-assign port if not set
-    if [ -z "${ASTRBOT_PORT:-}" ]; then
-        ASTRBOT_PORT=3000
-        while :; do
-            if grep -q "^ASTRBOT_PORT=$ASTRBOT_PORT$" "$CONFIG_DIR"/*.conf 2>/dev/null; then
-                # Port already in use, try next port
-                ((ASTRBOT_PORT++))
-                continue
-            fi
+    # Auto-assign port
+    ASTRBOT_PORT=3000
+    while :; do
+        if grep -q "^ASTRBOT_PORT=$ASTRBOT_PORT$" "$CONFIG_DIR"/*.conf 2>/dev/null; then
+            ((ASTRBOT_PORT++))
+            continue
+        fi
+        break
+    done
 
-            # Port is available, generate config from template
-            unset ASTRBOT_HOST ASTRBOT_PORT ASTRBOT_ROOT
-            INSTANCE_NAME="$instance"
-            ASTRBOT_ROOT="$SYSTEM_ROOT/$instance"
+    # Generate config from template
+    TMP_CONF="$(mktemp /tmp/astrbot.conf.XXXXXX)"
+    trap 'rm -f "$TMP_CONF"' EXIT
 
-            # shellcheck disable=SC1090
-            . "$TEMPLATE_FILE"
+    # shellcheck disable=SC2016
+    sed -e 's/${INSTANCE_NAME}/'"$INSTANCE_NAME/g" \
+        -e 's|${ASTRBOT_ROOT}|'"$ASTRBOT_ROOT|g" \
+        -e 's/${ASTRBOT_PORT}/'"$ASTRBOT_PORT/g" \
+        "$TEMPLATE_FILE" >"$TMP_CONF"
 
-            # Generate config from template
-            TMP_CONF="$(mktemp /tmp/astrbot.conf.XXXXXX)"
-            trap 'rm -f "$TMP_CONF"' EXIT
+    install -Dm644 "$TMP_CONF" "$CONF_FILE"
+    chown root:root "$CONF_FILE" 2>/dev/null || true
+    chmod 644 "$CONF_FILE" 2>/dev/null || true
 
-            # shellcheck disable=SC2016
-            sed -e 's/${INSTANCE_NAME}/'"$INSTANCE_NAME/g" \
-                -e 's|${ASTRBOT_ROOT}|'"$ASTRBOT_ROOT|g" \
-                "$TEMPLATE_FILE" >"$TMP_CONF"
-
-            install -Dm644 "$TMP_CONF" "$CONF_FILE"
-            chown root:root "$CONF_FILE" 2>/dev/null || true
-            chmod 644 "$CONF_FILE" 2>/dev/null || true
-
-            echo "✅ Config reset to template: $CONF_FILE"
-            echo "   (ASTRBOT_PORT=$ASTRBOT_PORT, ASTRBOT_HOST=$ASTRBOT_HOST)"
-            return 0
-        done
-    fi
+    echo "✅ Config reset to template: $CONF_FILE"
+    echo "   (ASTRBOT_PORT=$ASTRBOT_PORT, ASTRBOT_HOST=$ASTRBOT_HOST)"
+    return 0
 }
 
 print_paths() {
@@ -709,7 +699,7 @@ init)
     done
 
     # Write config file using template
-    TEMPLATE_FILE="$APP_DIR/config.template"
+    TEMPLATE_FILE="/etc/astrbot/tmpl.conf"
 
     if [ ! -f "$TEMPLATE_FILE" ]; then
         echo "❌ Error: Config template not found at $TEMPLATE_FILE"
@@ -812,7 +802,7 @@ cp)
     done
 
     # Write new config
-    TEMPLATE_FILE="$APP_DIR/config.template"
+    TEMPLATE_FILE="/etc/astrbot/tmpl.conf"
     if [ ! -f "$TEMPLATE_FILE" ]; then
         echo "❌ Error: Config template not found at $TEMPLATE_FILE"
         # Cleanup
