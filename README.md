@@ -105,8 +105,9 @@ This package uses a read-only application source (`/opt`) with per-instance muta
 ├── opt/
 │   └── astrbot/                  # [Read-Only] App source code
 │       ├── astrbot/              # Python source package
-│       ├── pyproject.toml        # Dependency definitions
-│       └── config.template       # Config template
+│       ├
+|       ── pyproject.toml        # Dependency definitions
+│     
 │
 ├── usr/
 │   ├── bin/
@@ -294,8 +295,8 @@ paru -S astrbot-git
 ├── opt/
 │   └── astrbot/                  # [只读] 应用程序核心代码库
 │       ├── astrbot/              # Python 源码包
-│       ├── pyproject.toml        # 依赖定义文件
-│       └── config.template       # 配置文件模板
+│       ── pyproject.toml        # 依赖定义文件
+│      
 │
 ├── usr/
 │   ├── bin/

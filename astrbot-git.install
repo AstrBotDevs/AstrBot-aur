@@ -1,17 +1,21 @@
 #!/bin/bash
+# shellcheck disable=SC2173
+set -e
 
 _ensure_environment() {
-    # 创建系统用户
+    if [ "$(id -u)" -ne 0 ]; then
+        echo "❌ Error: This script must be run as root (sudo)."
+        exit 1
+    fi
+
     if ! getent passwd astrbot >/dev/null; then
         useradd -r -M -d /var/lib/astrbot -s /usr/bin/nologin -c "AstrBot Service User" astrbot
     fi
 
-    # 创建并修正目录权限
     install -dm755 -o astrbot -g astrbot /var/lib/astrbot
     install -dm755 -o astrbot -g astrbot /var/cache/astrbot
     install -dm755 -o root -g root /etc/astrbot
 
-    # 确保递归权限正确
     if [ -d "/var/lib/astrbot" ]; then
         chown -R astrbot:astrbot /var/lib/astrbot
     fi
@@ -19,14 +23,12 @@ _ensure_environment() {
         chown -R astrbot:astrbot /var/cache/astrbot
     fi
 
-    # /opt/astrbot 应当是 root:root，但运行 uv 时可能需要读取
     if [ -d "/opt/astrbot" ]; then
         chmod -R o+rx /opt/astrbot
     fi
 }
 
 pre_install() {
-    # ⚠️ 检查旧的 uv 安装
     local user_home
     user_home="$(getent passwd "$SUDO_USER" 2>/dev/null | cut -d: -f6)"
 
@@ -45,7 +47,6 @@ pre_install() {
         fi
     fi
 
-    # ⚠️ 检查 root 用户残留缓存
     if [ -d "/root/.cache/astrbot" ]; then
         echo ""
         echo "============== ⚠️  检测到 root 用户的 astrbot 缓存 =============="
@@ -55,12 +56,9 @@ pre_install() {
         echo "============================================================="
         echo ""
     fi
-
-    return 0
 }
 
 post_install() {
-
     _ensure_environment
     systemctl daemon-reload
 
@@ -92,7 +90,6 @@ post_install() {
 }
 
 post_upgrade() {
-
     _ensure_environment
     systemctl daemon-reload
 
@@ -117,6 +114,11 @@ post_upgrade() {
 }
 
 post_remove() {
+    if [ "$(id -u)" -ne 0 ]; then
+        echo "❌ Error: This script must be run as root (sudo)."
+        exit 1
+    fi
+
     echo "-------------------------------------------------------------------"
     echo "⚠️ 数据未删除，如需彻底清理："
     echo "   sudo rm -rf /var/lib/astrbot /var/cache/astrbot /etc/astrbot"
