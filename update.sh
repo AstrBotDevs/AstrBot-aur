@@ -10,7 +10,16 @@ PKGNAME=$(awk -F= '/^pkgname=/{gsub(/'\''|"/, "", $2); print $2; exit}' PKGBUILD
 
 echo "同步本地分支到远端最新 commit..."
 git fetch --prune origin
-git pull --ff-only origin "$BRANCH"
+git pull origin "$BRANCH" || {
+    echo "⚠️ Pull failed (可能存在本地分支分歧)，正在尝试 rebase..."
+    git pull --rebase origin "$BRANCH" || {
+        echo "❌ Pull 失败，请手动解决冲突："
+        echo "   cd $SCRIPT_DIR"
+        echo "   git status"
+        echo "   git rebase --abort  # 如需放弃"
+        exit 1
+    }
+}
 
 echo "清理旧文件..."
 rm -rf src/ pkg/ "$PKGNAME" *.pkg.tar.* *.tar.gz *.tar.xz

@@ -7,13 +7,11 @@ _ensure_environment() {
     fi
 
     # 创建并修正目录权限
-    # install -d 会创建目录如果不存在
     install -dm755 -o astrbot -g astrbot /var/lib/astrbot
     install -dm755 -o astrbot -g astrbot /var/cache/astrbot
     install -dm755 -o root -g root /etc/astrbot
 
-    # 确保递归权限正确 (修复升级或手动修改后的权限)
-    # 使用 if 检查防止在极少数情况下目录未创建导致脚本报错
+    # 确保递归权限正确
     if [ -d "/var/lib/astrbot" ]; then
         chown -R astrbot:astrbot /var/lib/astrbot
     fi
@@ -21,8 +19,7 @@ _ensure_environment() {
         chown -R astrbot:astrbot /var/cache/astrbot
     fi
 
-    # /opt/astrbot 应当是 root:root，但在运行 uv 时可能需要读取
-    # 确保其它用户有 rx 权限
+    # /opt/astrbot 应当是 root:root，但运行 uv 时可能需要读取
     if [ -d "/opt/astrbot" ]; then
         chmod -R o+rx /opt/astrbot
     fi
@@ -37,32 +34,33 @@ pre_install() {
         if [ -f "$user_home/.local/bin/astrbot" ] ||
             [ -d "$user_home/.local/share/uv/tools/astrbot" ]; then
             echo ""
-            echo "============== ❌ 检测到 uv tool 安装的 astrbot =============="
+            echo "============== ⚠️  检测到 uv tool 安装的 astrbot =============="
             echo "卸载："
             echo "   uv tool uninstall astrbot"
-            echo "安装将继续进行"
             echo "数据迁移："
             echo "   将 data 目录移动至 /var/lib/astrbot/<实例名>"
             echo "============================================================="
             echo ""
-            return 1
+            echo ">>> 安装继续，但请尽快手动清理旧安装以避免冲突..."
         fi
     fi
 
-    # ⚠️ 检查 root 用户残留缓存 (防止权限混淆)
+    # ⚠️ 检查 root 用户残留缓存
     if [ -d "/root/.cache/astrbot" ]; then
         echo ""
         echo "============== ⚠️  检测到 root 用户的 astrbot 缓存 =============="
         echo "发现目录: /root/.cache/astrbot"
-        echo "这通常意味着您之前尝试以 root 身份直接运行过 AstrBot。"
-        echo "为了避免权限问题和磁盘空间浪费，建议删除此目录："
+        echo "建议删除以避免权限问题："
         echo "   sudo rm -rf /root/.cache/astrbot"
         echo "============================================================="
         echo ""
     fi
+
+    return 0
 }
 
 post_install() {
+
     _ensure_environment
     systemctl daemon-reload
 
@@ -94,6 +92,7 @@ post_install() {
 }
 
 post_upgrade() {
+
     _ensure_environment
     systemctl daemon-reload
 
@@ -104,10 +103,10 @@ post_upgrade() {
     echo ">>> 提示: 创建实例："
     echo ">>> sudo astrbotctl init light"
     echo ">>> sudo astrbotctl run light # 在当前会话启动实例"
-    echo ">>> sudo astrbotctl start light # 在启动实例服务（等价于sudo systemctl start astrbot@light）"
-    echo ">>> sudo astrbotctl stop light # 在停止实例服务（等价于sudo systemctl stop astrbot@light）"
-    echo ">>> sudo astrbotctl restart light # 在重启实例服务（等价于sudo systemctl restart astrbot@light）"
-    echo ">>> sudo astrbotctl status light # 在查看实例状态（等价于sudo systemctl status astrbot@light）"
+    echo ">>> sudo astrbotctl start light # 在启动实例服务"
+    echo ">>> sudo astrbotctl stop light # 在停止实例服务"
+    echo ">>> sudo astrbotctl restart light # 在重启实例服务"
+    echo ">>> sudo astrbotctl status light # 在查看实例状态"
     echo "【文件路径】"
     echo "  数据目录： /var/lib/astrbot/<实例名>"
     echo "  配置文件： /etc/astrbot/<实例名>.conf"
