@@ -2,7 +2,7 @@
 
 pkgname=astrbot-git
 _pkgname=astrbot
-pkgver=4.20.1.r223.g43e107068
+pkgver=0.0.0.r1.g43e1070
 pkgrel=1
 pkgdesc="Agentic IM Chatbot infrastructure (multi-instance, astrbotctl only)"
 arch=('any')
@@ -16,44 +16,50 @@ provides=("$_pkgname")
 conflicts=("$_pkgname")
 
 source=(
-    "$pkgname::git+$url.git#branch=dev"
     "astrbotctl"
     "astrbot@.service"
     "config.template"
 )
 
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP')
 
 install=astrbot-git.install
 
+prepare() {
+    msg2 "Shallow cloning AstrBot repository..."
+    git clone --depth=1 --branch=dev \
+        "https://github.com/AstrBotDevs/AstrBot.git" \
+        "$srcdir/$_pkgname"
+}
+
 pkgver() {
-    cd "$pkgname"
-    git describe --long --tags 2>/dev/null |
-        sed 's/\([^-]*-g\)/r\1/;s/-/./g' |
-        sed 's/^v//g' ||
+    cd "$srcdir/$_pkgname"
+    local _ver
+    _ver=$(git describe --long --tags 2>/dev/null) ||
+        _ver=""
+    if [ -z "$_ver" ]; then
+        # Shallow clone fallback: use commit count and hash
         echo "0.0.0.r$(git rev-list --count HEAD).g$(git rev-parse --short HEAD)"
+    else
+        echo "$_ver" | sed 's/\([^-]*-g\)/r\1/;s/-/./g' | sed 's/^v//g'
+    fi
 }
 
 package() {
-    cd "$pkgname"
+    cd "$srcdir/$_pkgname"
 
     local _appdir="/opt/$_pkgname"
 
-    # 程序本体
     install -d "$pkgdir$_appdir"
     cp -r astrbot scripts pyproject.toml README.md LICENSE "$pkgdir$_appdir/"
 
-    # 配置文件模板
     install -Dm644 "$srcdir/config.template" "$pkgdir$_appdir/config.template"
 
-    # 控制工具（唯一入口）
     install -Dm755 "$srcdir/astrbotctl" \
         "$pkgdir/usr/bin/astrbotctl"
 
-    # systemd
     install -Dm644 "$srcdir/astrbot@.service" \
         "$pkgdir/usr/lib/systemd/system/astrbot@.service"
 
-    # license
     install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }
