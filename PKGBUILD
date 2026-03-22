@@ -17,11 +17,12 @@ conflicts=("$_pkgname")
 
 source=(
     "astrbotctl"
+    "astrbotctl.functions"
     "astrbot@.service"
     "tmpl.conf"
 )
 
-sha256sums=('SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 install=astrbot-git.install
 
@@ -67,6 +68,9 @@ package() {
 
     install -Dm755 "$srcdir/astrbotctl" \
         "$pkgdir/usr/bin/astrbotctl"
+
+    install -Dm644 "$srcdir/astrbotctl.functions" \
+        "$pkgdir/usr/bin/astrbotctl.functions"
 
     install -Dm644 "$srcdir/astrbot@.service" \
         "$pkgdir/usr/lib/systemd/system/astrbot@.service"

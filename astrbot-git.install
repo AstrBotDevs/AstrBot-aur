@@ -14,7 +14,7 @@ _ensure_environment() {
 
     install -dm755 -o astrbot -g astrbot /var/lib/astrbot
     install -dm755 -o astrbot -g astrbot /var/cache/astrbot
-    install -dm755 -o root -g root /etc/astrbot
+    install -dm755 -o root    -g root    /etc/astrbot
 
     if [ -d "/var/lib/astrbot" ]; then
         chown -R astrbot:astrbot /var/lib/astrbot
@@ -66,26 +66,33 @@ post_install() {
     echo "AstrBot 已安装（多实例支持，仅使用 astrbotctl）"
     echo ""
     echo "【创建实例】"
-    echo "  sudo astrbotctl init <实例名>     # 初始化新实例"
-    echo "  sudo astrbotctl init -f <备份> <实例名>  # 从备份初始化实例"
-    echo "  sudo astrbotctl cp <src> <dest>   # 复制/克隆实例"
-    echo "  更多命令请查看帮助：astrbotctl"
-    echo "【运行服务】"
-    echo "  sudo systemctl start astrbot@<实例名>"
-    echo "  sudo systemctl enable astrbot@<实例名>"
+    echo "  sudo astrbotctl init <实例名>              # 初始化新实例"
+    echo "  sudo astrbotctl init -f <备份> <实例名>   # 从备份初始化"
+    echo "  sudo astrbotctl cp <src> <dest>            # 复制实例"
     echo ""
-    echo "【高级管理】"
-    echo "  astrbotctl list                   # 列出所有实例"
-    echo "  astrbotctl password <实例名>      # 修改后台用户名/密码"
-    echo "  astrbotctl export <实例名>        # 导出备份"
-    echo "  astrbotctl import <实例名> <备份> # 导入备份"
-    echo "  astrbotctl cli <实例名> <命令>    # 执行 AstrBot 原生命令"
-    echo "    例如：astrbotctl cli bot1 plug list"
+    echo "【运行服务】"
+    echo "  sudo systemctl start  astrbot@<实例名>"
+    echo "  sudo systemctl enable --now astrbot@<实例名>"
+    echo ""
+    echo "【常用管理】"
+    echo "  sudo astrbotctl stop   <实例名>   # 停止"
+    echo "  sudo astrbotctl status <实例名>   # 状态"
+    echo "  sudo astrbotctl list              # 列出所有实例"
+    echo "  sudo astrbotctl reset  <实例名>   # 重置配置"
+    echo ""
+    echo "【备份与恢复】"
+    echo "  astrbotctl export <实例名>              # 导出备份"
+    echo "  astrbotctl import <实例名> <备份文件>  # 导入备份"
+    echo ""
+    echo "【插件与配置】"
+    echo "  astrbotctl cli <实例名> plug list       # 查看插件"
+    echo "  astrbotctl admin <实例名>               # 修改后台密码"
     echo ""
     echo "【文件路径】"
-    echo "  数据目录： /var/lib/astrbot/<实例名>"
-    echo "  配置文件： /etc/astrbot/<实例名>.conf"
-    echo "  服务日志： journalctl -u astrbot@<实例名> -f"
+    echo "  代码目录：     /opt/astrbot"
+    echo "  数据目录：     /var/lib/astrbot/<实例名>"
+    echo "  配置文件：     /etc/astrbot/<实例名>.conf"
+    echo "  服务日志：     journalctl -u astrbot@<实例名> -f"
     echo "-------------------------------------------------------------------"
 }
 
@@ -93,24 +100,27 @@ post_upgrade() {
     _ensure_environment
     systemctl daemon-reload
 
-    echo ">>> AstrBot 已更新，当前为非稳定版本，请注意备份数据（astrbot bk）。"
-    echo ">>> 如遇问题可清理缓存： sudo rm -rf /var/cache/astrbot/*"
-    echo ">>> 提示：使用 'astrbotctl cli <name> ...' 来管理插件或执行其他命令。"
-    echo ">>> 提示：使用paru -S astrbot-git --devel 来更新开发版本，或者手动清理缓存。"
-    echo ">>> 提示: 创建实例："
-    echo ">>> sudo astrbotctl init light"
-    echo ">>> sudo astrbotctl run light # 在当前会话启动实例"
-    echo ">>> sudo astrbotctl start light # 在启动实例服务"
-    echo ">>> sudo astrbotctl stop light # 在停止实例服务"
-    echo ">>> sudo astrbotctl restart light # 在重启实例服务"
-    echo ">>> sudo astrbotctl status light # 在查看实例状态"
+    echo "-------------------------------------------------------------------"
+    echo "AstrBot 已更新（多实例版本）"
+    echo ""
+    echo "【快速开始】"
+    echo "  sudo astrbotctl init light              # 创建首个实例"
+    echo "  sudo systemctl start  astrbot@light    # 启动"
+    echo "  sudo systemctl enable --now astrbot@light  # 开机自启"
+    echo ""
+    echo "【更新代码】"
+    echo "  sudo astrbotctl git pull --sync        # 更新到最新 dev"
+    echo ""
+    echo "【查看日志】"
+    echo "  journalctl -u astrbot@light -f"
+    echo ""
     echo "【文件路径】"
-    echo "  数据目录： /var/lib/astrbot/<实例名>"
-    echo "  配置文件： /etc/astrbot/<实例名>.conf"
-    echo "  服务日志： journalctl -u astrbot@<实例名> -f"
-    echo "  代码问题：sudo astrbotctl git pull --sync"
-    echo "  访问：https://dash.astrbot.men"
-    echo "  下载前端文件：https://download.astrbot.men/"
+    echo "  数据目录：     /var/lib/astrbot/<实例名>"
+    echo "  配置文件：     /etc/astrbot/<实例名>.conf"
+    echo ""
+    echo "⚠️  如遇异常，请尝试重建 Python 环境："
+    echo "    sudo astrbotctl git pull --sync --rebuild-venv <实例名>"
+    echo "-------------------------------------------------------------------"
 }
 
 post_remove() {
@@ -120,7 +130,7 @@ post_remove() {
     fi
 
     echo "-------------------------------------------------------------------"
-    echo "⚠️ 数据未删除，如需彻底清理："
+    echo "⚠️  数据未删除，如需彻底清理："
     echo "   sudo rm -rf /var/lib/astrbot /var/cache/astrbot /etc/astrbot"
     echo "   sudo userdel astrbot"
     echo "-------------------------------------------------------------------"
