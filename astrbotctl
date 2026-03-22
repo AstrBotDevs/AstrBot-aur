@@ -330,14 +330,15 @@ admin)
     load_instance_config
     [ ! -d "$ASTRBOT_ROOT" ] && { echo "❌ Error: Instance directory $ASTRBOT_ROOT does not exist." >&2; exit 1; }
 
-    if [ -n "$username" ] && [ -n "$password" ]; then
-        run_astrbot conf admin -u "$username" -p "$password"
-    elif [ -n "$username" ]; then
-        run_astrbot conf admin -u "$username"
-    elif [ -n "$password" ]; then
-        run_astrbot conf admin -p "$password"
-    else
-        run_astrbot conf admin
+    if [ -n "$username" ]; then
+        run_astrbot conf set dashboard.username "$username"
+    fi
+    if [ -n "$password" ]; then
+        run_astrbot conf set dashboard.password "$password"
+    fi
+    if [ -z "$username" ] && [ -z "$password" ]; then
+        echo "❌ Error: Must provide at least one of -u/--username or -p/--password" >&2
+        exit 1
     fi
     ;;
 
