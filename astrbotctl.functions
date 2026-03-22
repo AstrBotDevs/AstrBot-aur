@@ -484,6 +484,7 @@ Usage:
   astrbotctl import [options] <name> <backup_file> # Import instance backup
   sudo astrbotctl git pull [--sync] [instance|--all]            # Pull latest app source
   sudo astrbotctl git pull --rebuild-venv [instance|--all]     # Pull and rebuild venv(s)
+  sudo astrbotctl update [instance|--all]                    # Update AUR package + venv + restart
 
 Init options:
   -f, --backup <file>  Initialize the instance from a backup archive

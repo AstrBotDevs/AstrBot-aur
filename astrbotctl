@@ -512,7 +512,21 @@ exit 0 ;;
     fi
 
     echo ""
-    echo "[1/3] Pulling AUR package..."
+    echo "[1/4] Fixing broken dashboard symlink..."
+    _fix_dashboard_symlink() {
+        local _dist_src="/opt/astrbot/astrbot/dashboard/dist"
+        local _dist_dst="/opt/astrbot/dashboard/dist"
+        if [ -L "$_dist_src" ] && [ ! -e "$_dist_src" ]; then
+            rm -f "$_dist_src"
+            mkdir -p "$(dirname "$_dist_dst")"
+            ln -s "$_dist_dst" "$_dist_src"
+            echo ">>> Dashboard symlink fixed."
+        fi
+    }
+    _fix_dashboard_symlink
+
+    echo ""
+    echo "[2/4] Pulling AUR package..."
     if command -v paru >/dev/null 2>&1; then
         # Try as lightjunction first (paru config is per-user)
         sudo -u lightjunction paru -Syu --noconfirm 2>&1 || \
@@ -526,12 +540,12 @@ exit 0 ;;
         [ ! -d "$ASTRBOT_ROOT" ] && { echo "⚠️  Instance $inst directory missing, skipping."; continue; }
 
         echo ""
-        echo "[2/3] Rebuilding venv for: $inst"
+        echo "[3/4] Rebuilding venv for: $inst"
         rm -rf "$CACHE_DIR/venv-$inst"
         ensure_instance_env_synced
 
         echo ""
-        echo "[3/3] Restarting: $inst"
+        echo "[4/4] Restarting: $inst"
         systemctl restart "astrbot@$inst" 2>/dev/null || \
             echo "⚠️  Could not restart (may not be enabled)"
     done

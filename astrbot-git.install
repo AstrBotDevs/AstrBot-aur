@@ -70,6 +70,22 @@ _clone_app() {
         exit 1
     }
     echo ">>> /opt/astrbot ready ($(git -C /opt/astrbot describe --tags 2>/dev/null || git -C /opt/astrbot rev-parse --short HEAD))"
+
+    # Fix broken dashboard/dist symlink if it points to non-existent path.
+    # The symlink is stored as ../../dashboard/dist which resolves relative to
+    # the build context. Create a matching stub so hatch builds succeed.
+    local _dist_src="/opt/astrbot/astrbot/dashboard/dist"
+    local _dist_dst="/opt/astrbot/dashboard/dist"
+    if [ -L "$_dist_src" ]; then
+        local _target
+        _target="$(readlink "$_dist_src")"
+        if [ ! -e "$_dist_src" ]; then
+            echo ">>> Fixing broken dashboard dist symlink..."
+            rm -f "$_dist_src"
+            mkdir -p "$(dirname "$_dist_dst")"
+            ln -s "$_dist_dst" "$_dist_src"
+        fi
+    fi
 }
 
 # ─── Hooks ─────────────────────────────────────────────────────────────────────
@@ -103,6 +119,7 @@ post_install() {
     echo "【常用管理】"
     echo "  sudo astrbotctl list / stop / status <实例名>"
     echo "  sudo astrbotctl reset <实例名>   # 重置配置"
+    echo "  sudo astrbotctl update <实例名>   # 更新代码+环境+重启"
     echo ""
     echo "【备份与恢复】"
     echo "  astrbotctl export <实例名>              # 导出"
@@ -130,6 +147,10 @@ post_upgrade() {
     echo ""
     echo "【更新代码】"
     echo "  sudo pacman -Syu  # 通过本包更新代码"
+    echo ""
+    echo "【更新实例（推荐）】"
+    echo "  sudo astrbotctl update <实例名>           # 更新代码+重建环境+重启"
+    echo "  sudo astrbotctl update --all             # 更新所有实例"
     echo ""
     echo "【如遇异常】"
     echo "  sudo astrbotctl git pull --sync --rebuild-venv <实例名>"
