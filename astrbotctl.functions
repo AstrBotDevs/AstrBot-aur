@@ -1,3 +1,4 @@
+#!/bin/bash
 # astrbotctl - shared functions library
 # shellcheck shell=bash
 # shellcheck source=astrbotctl
@@ -86,8 +87,8 @@ find_free_port() {
     local used_line
     # shellcheck disable=SC2261
     used_line=$(find "$CONFIG_DIR" -maxdepth 1 -name '*.conf' -type f \
-        -exec grep -h '^ASTRBOT_PORT=' {} + 2>/dev/null \
-        | cut -d= -f2 | tr '\n' ' ')
+        -exec grep -h '^ASTRBOT_PORT=' {} + 2>/dev/null |
+        cut -d= -f2 | tr '\n' ' ')
 
     # Collect currently listening ports.
     local active_line
@@ -96,8 +97,8 @@ find_free_port() {
     ASTRBOT_PORT=$start_port
     while :; do
         # Use awk for portable word-splitting and matching in both bash and zsh.
-        port_used=$(echo "$used_line $active_line" \
-            | awk '{for(i=1;i<=NF;i++) if($i==p) found=1} END{print found?1:0}' p="$ASTRBOT_PORT")
+        port_used=$(echo "$used_line $active_line" |
+            awk '{for(i=1;i<=NF;i++) if($i==p) found=1} END{print found?1:0}' p="$ASTRBOT_PORT")
         [ "$port_used" -eq 0 ] && break
         ASTRBOT_PORT=$((ASTRBOT_PORT + 1))
     done
@@ -279,8 +280,8 @@ iter_instances() {
         [ -f "$conf" ] || continue
         name=$(basename "$conf" .conf)
         [ -d "$SYSTEM_ROOT/$name" ] && printf '%s\n' "$name"
-    done < <(find "$CONFIG_DIR" -maxdepth 1 -name '*.conf' -type f 2>/dev/null) \
-    | sort -u
+    done < <(find "$CONFIG_DIR" -maxdepth 1 -name '*.conf' -type f 2>/dev/null) |
+        sort -u
 }
 
 # ─── Certbot helpers ─────────────────────────────────────────────────────────
@@ -295,8 +296,14 @@ sync_certbot_cert_for_instance() {
     local src_key="$live_dir/privkey.pem"
     local dest_dir="$CERTBOT_INSTANCE_CERTS_DIR/${instance}"
 
-    [ -f "$src_cert" ] || { echo "❌ Error: Certificate file not found: $src_cert" >&2; return 1; }
-    [ -f "$src_key" ]  || { echo "❌ Error: Private key file not found: $src_key" >&2;     return 1; }
+    [ -f "$src_cert" ] || {
+        echo "❌ Error: Certificate file not found: $src_cert" >&2
+        return 1
+    }
+    [ -f "$src_key" ] || {
+        echo "❌ Error: Private key file not found: $src_key" >&2
+        return 1
+    }
 
     # Determine group flag (skip if 'astrbot' group doesn't exist in this env)
     local group_g=""
@@ -304,7 +311,7 @@ sync_certbot_cert_for_instance() {
 
     install -d -m750 -o root "$group_g" "$dest_dir"
     install -m640 -o root "$group_g" "$src_cert" "$dest_dir/fullchain.pem"
-    install -m640 -o root "$group_g" "$src_key"  "$dest_dir/privkey.pem"
+    install -m640 -o root "$group_g" "$src_key" "$dest_dir/privkey.pem"
 }
 
 # Write the certbot deploy hook that triggers __certbot-deploy on renewal.
@@ -359,26 +366,27 @@ update_app_git_checkout() {
 
 # ─── Core run logic ──────────────────────────────────────────────────────────
 
-# The main run entry point (called by systemd service and `astrbotctl run`).
+# Main entry point for running an AstrBot instance.
+# Sets up env, ensures venv exists, then execs into the Python process.
+# Called directly by systemd (__run_astrbot) or by 'astrbotctl run'.
 run_astrbot() {
     setup_runtime_env
-
-    _runuser_with_env "$ASTRBOT_ROOT/data/.env" "$runtime_root" :
 
     local venv_python="$UV_PROJECT_ENVIRONMENT/bin/python"
     local venv_astrbot="$UV_PROJECT_ENVIRONMENT/bin/astrbot"
 
-    # Rebuild the venv if it is missing or incomplete.
+    # Rebuild venv if missing or incomplete.
     if [ ! -x "$venv_python" ] || [ ! -x "$venv_astrbot" ]; then
         echo ">>> Initializing virtual environment..."
-        [ -d "$UV_PROJECT_ENVIRONMENT" ] && [ ! -x "$venv_python" ] && rm -rf "$UV_PROJECT_ENVIRONMENT"
+        [ -d "$UV_PROJECT_ENVIRONMENT" ] && [ ! -x "$venv_python" ] \
+            && rm -rf "$UV_PROJECT_ENVIRONMENT"
         _runuser_with_env "$ASTRBOT_ROOT/data/.env" "$runtime_root" \
             uv venv "$UV_PROJECT_ENVIRONMENT" --python 3.12
         _runuser_with_env "$ASTRBOT_ROOT/data/.env" "$runtime_root" \
             uv pip install "$APP_DIR"
     fi
 
-    [ -d "$ASTRBOT_ROOT" ] && cd "$ASTRBOT_ROOT" || exit
+    cd "$ASTRBOT_ROOT" || exit
     exec "$venv_astrbot" "$@"
 }
 

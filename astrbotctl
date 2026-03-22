@@ -23,7 +23,8 @@ __certbot-deploy)
 
 # ── Internal: systemd service entry point ────────────────────────────────────
 __run_astrbot)
-    instance="${1?}" && shift 2 || exit 1
+    instance="${1?}" && shift || exit 1
+    load_instance_config
     run_astrbot "$@"
     ;;
 
@@ -270,17 +271,10 @@ run)
         exit 1
     }
 
-    run_host="${ASTRBOT_HOST:-0.0.0.0}"
-    run_port="${ASTRBOT_PORT:-}"
-
     echo ">>> Starting AstrBot instance: $instance"
-    echo ">>> Host: $run_host  Port: ${run_port:-default}"
 
     shift 2
-    # shellcheck disable=SC2086
-    run_astrbot run \
-        --root "$ASTRBOT_ROOT" --host "$run_host" \
-        ${run_port:+--port $run_port} "$@"
+    run_astrbot "$@"
     ;;
 
 # ── cli ───────────────────────────────────────────────────────────────────────
