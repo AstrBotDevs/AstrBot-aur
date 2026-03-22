@@ -1,5 +1,13 @@
 #!/bin/bash
-
+#
+# update.sh - Update astrbot-git AUR package
+#
+# This script handles the full update workflow:
+#   1. Pull latest from origin (AUR)
+#   2. Download and compute new pkgver from upstream repos
+#   3. Bump pkgrel (always, to force rebuild even on hotfix changes)
+#   4. Commit and push to both AUR and GitHub mirror
+#
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -8,31 +16,43 @@ cd "$SCRIPT_DIR"
 BRANCH=$(git symbolic-ref --short HEAD)
 PKGNAME=$(awk -F= '/^pkgname=/{gsub(/'\''|"/, "", $2); print $2; exit}' PKGBUILD)
 
-echo "同步本地分支到远端最新 commit..."
+echo "=== Updating astrbot-git ==="
+
+echo "[1/5] Fetching latest from AUR..."
 git fetch --prune origin
-git pull origin "$BRANCH" || {
-    echo "⚠️ Pull failed (可能存在本地分支分歧)，正在尝试 rebase..."
+
+echo "[2/5] Checking for divergence..."
+LOCAL=$(git rev-parse @)
+REMOTE=$(git rev-parse origin/$BRANCH)
+BASE=$(git merge-base @ origin/$BRANCH)
+
+if [ "$LOCAL" = "$REMOTE" ]; then
+    echo ">>> Already up to date with AUR."
+elif [ "$LOCAL" = "$BASE" ]; then
+    echo ">>> Fast-forwarding to latest AUR..."
+    git pull origin "$BRANCH"
+elif [ "$REMOTE" = "$BASE" ]; then
+    echo ">>> Local commits ahead — will push after rebuild."
     git pull --rebase origin "$BRANCH" || {
-        echo "❌ Pull 失败，请手动解决冲突："
-        echo "   cd $SCRIPT_DIR"
-        echo "   git status"
-        echo "   git rebase --abort  # 如需放弃"
+        echo "❌ Pull with rebase failed. Resolve conflicts manually."
         exit 1
     }
-}
+else
+    echo "❌ Diverged from AUR. Manual resolution required."
+    git status
+    exit 1
+fi
 
-echo "清理旧文件..."
-rm -rf src/ pkg/ "$PKGNAME" *.pkg.tar.* *.tar.gz *.tar.xz
+echo "[3/5] Downloading upstream sources and computing version..."
+rm -rf src/ pkg/ "$PKGNAME"*.pkg.tar.* 2>/dev/null || true
 
-echo "刷新源码并重新计算 pkgver..."
-makepkg -od
+makepkg -od --noconfirm
 
 TMP_SRCINFO="$(mktemp)"
 trap 'rm -f "$TMP_SRCINFO"' EXIT
-
 makepkg --printsrcinfo >"$TMP_SRCINFO"
-NEW_VER=$(awk '$1 == "pkgver" && $2 == "=" { print $3; exit }' "$TMP_SRCINFO")
 
+NEW_VER=$(awk '$1 == "pkgver" && $2 == "=" { print $3; exit }' "$TMP_SRCINFO")
 [ -n "$NEW_VER" ] || {
     echo "❌ 无法从 .SRCINFO 解析 pkgver"
     exit 1
@@ -42,21 +62,29 @@ OLD_VER=$(awk -F= '/^pkgver=/{gsub(/'\''|"/, "", $2); print $2; exit}' PKGBUILD)
 OLD_PKGREL=$(awk -F= '/^pkgrel=/{gsub(/'\''|"/, "", $2); print $2; exit}' PKGBUILD)
 
 if [ "$NEW_VER" != "$OLD_VER" ]; then
-    echo "检测到新版本，重置 pkgrel..."
+    echo ">>> 版本变化: ${OLD_VER} → ${NEW_VER}，重置 pkgrel=1"
     NEW_PKGREL=1
 else
-    echo "版本未变，递增 pkgrel..."
+    echo ">>> 版本未变，递增 pkgrel: ${OLD_PKGREL} → $((OLD_PKGREL + 1))"
     NEW_PKGREL=$((OLD_PKGREL + 1))
 fi
 
-echo "同步 PKGBUILD 和 .SRCINFO..."
+echo "[4/5] Updating PKGBUILD and .SRCINFO..."
 sed -i "s/^pkgver=.*/pkgver=${NEW_VER}/" PKGBUILD
 sed -i "s/^pkgrel=.*/pkgrel=${NEW_PKGREL}/" PKGBUILD
 makepkg --printsrcinfo >.SRCINFO
 
-echo "提交更改并推送至 AUR 和GITHUB镜像..."
-git add .
-git commit -m "update to version $NEW_VER-$NEW_PKGREL" || echo "⚠️ 没有检测到更改，跳过提交"
+echo "[5/5] Committing and pushing..."
+git add PKGBUILD .SRCINFO
+if git diff --cached --quiet; then
+    echo ">>> 没有 PKGBUILD/.SRCINFO 更改，跳过提交"
+else
+    git commit -m "update to version $NEW_VER-$NEW_PKGREL"
+fi
 git push origin "$BRANCH"
-git push github "$BRANCH"
-echo "--- ✅ 更新完成！当前版本: $NEW_VER-$NEW_PKGREL ---"
+git push github "$BRANCH" 2>/dev/null || echo "⚠️ GitHub push failed (check credentials)"
+
+echo "=== ✅ 完成！版本: $NEW_VER-$NEW_PKGREL ==="
+echo ""
+echo "在远程服务器上执行以下命令更新:"
+echo "  ssh ArchDmit 'sudo -u lightjunction paru -Syu astrbot-git --noconfirm'"

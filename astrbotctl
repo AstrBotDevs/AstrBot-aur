@@ -473,6 +473,73 @@ git)
     fi
     ;;
 
+# ── update ───────────────────────────────────────────────────────────────────
+# Unified update: pull AUR package + rebuild venv + restart instance.
+# This is the recommended way to update astrbotctl and astrbot source.
+update)
+    instance="" all=0
+
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+        --all) all=1; shift ;;
+        -h|--help) cat <<'USAGE'
+Usage: sudo astrbotctl update [instance|--all]
+
+Update astrbot: pull latest AUR package, rebuild venv, restart instance.
+
+Examples:
+  sudo astrbotctl update light         # Update light instance
+  sudo astrbotctl update --all         # Update all instances
+USAGE
+exit 0 ;;
+        -*) echo "❌ Error: Unknown option: $1" >&2; exit 1 ;;
+        *)  [ -n "$instance" ] && { echo "❌ Error: Unexpected extra argument: $1" >&2; exit 1; }
+            instance="$1"; shift ;;
+        esac
+    done
+
+    require_root
+
+    if [ "$all" -eq 1 ]; then
+        instances=$(iter_instances)
+        [ -z "$instances" ] && { echo ">>> No instances found."; exit 0; }
+        echo ">>> Updating all instances: $instances"
+    else
+        [ -z "$instance" ] && { echo "❌ Error: Instance name or --all required." >&2; exit 1; }
+        instances="$instance"
+        require_instance
+        echo ">>> Updating instance: $instance"
+    fi
+
+    echo ""
+    echo "[1/3] Pulling AUR package..."
+    if command -v paru >/dev/null 2>&1; then
+        # Try as lightjunction first (paru config is per-user)
+        sudo -u lightjunction paru -Syu --noconfirm 2>&1 || \
+            { echo "⚠️  paru update failed, trying makepkg..."; }
+    else
+        echo "⚠️  paru not found, skipping AUR package update."
+    fi
+
+    for inst in $instances; do
+        load_instance_config
+        [ ! -d "$ASTRBOT_ROOT" ] && { echo "⚠️  Instance $inst directory missing, skipping."; continue; }
+
+        echo ""
+        echo "[2/3] Rebuilding venv for: $inst"
+        rm -rf "$CACHE_DIR/venv-$inst"
+        ensure_instance_env_synced
+
+        echo ""
+        echo "[3/3] Restarting: $inst"
+        systemctl restart "astrbot@$inst" 2>/dev/null || \
+            echo "⚠️  Could not restart (may not be enabled)"
+    done
+
+    echo ""
+    echo "=== ✅ Update complete ==="
+    ;;
+
 # ── help / unknown ─────────────────────────────────────────────────────────────
 -h|--help|"") print_help; exit 0 ;;
 *)             print_help; exit 1 ;;
