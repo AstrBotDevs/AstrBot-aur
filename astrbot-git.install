@@ -16,46 +16,26 @@ _ensure_environment() {
     install -dm755 -o astrbot -g astrbot /var/cache/astrbot
     install -dm755 -o root    -g root    /etc/astrbot
 
-    if [ -d "/var/lib/astrbot" ]; then
-        chown -R astrbot:astrbot /var/lib/astrbot
-    fi
-    if [ -d "/var/cache/astrbot" ]; then
-        chown -R astrbot:astrbot /var/cache/astrbot
-    fi
+    [ -d "/var/lib/astrbot" ] && chown -R astrbot:astrbot /var/lib/astrbot
+    [ -d "/var/cache/astrbot" ] && chown -R astrbot:astrbot /var/cache/astrbot
+    [ -d "/opt/astrbot" ] && chmod -R o+rx /opt/astrbot
+}
 
+# Remove the entire /opt/astrbot directory before install/upgrade so that
+# pacman never sees "file exists in filesystem" conflicts from leftover files.
+_clean_opt_astrbot() {
     if [ -d "/opt/astrbot" ]; then
-        chmod -R o+rx /opt/astrbot
+        echo ">>> Removing existing /opt/astrbot (upgrading)..."
+        rm -rf /opt/astrbot
     fi
 }
 
 pre_install() {
-    local user_home
-    user_home="$(getent passwd "$SUDO_USER" 2>/dev/null | cut -d: -f6)"
+    _clean_opt_astrbot
+}
 
-    if [ -n "$user_home" ]; then
-        if [ -f "$user_home/.local/bin/astrbot" ] ||
-            [ -d "$user_home/.local/share/uv/tools/astrbot" ]; then
-            echo ""
-            echo "============== ⚠️  检测到 uv tool 安装的 astrbot =============="
-            echo "卸载："
-            echo "   uv tool uninstall astrbot"
-            echo "数据迁移："
-            echo "   将 data 目录移动至 /var/lib/astrbot/<实例名>"
-            echo "============================================================="
-            echo ""
-            echo ">>> 安装继续，但请尽快手动清理旧安装以避免冲突..."
-        fi
-    fi
-
-    if [ -d "/root/.cache/astrbot" ]; then
-        echo ""
-        echo "============== ⚠️  检测到 root 用户的 astrbot 缓存 =============="
-        echo "发现目录: /root/.cache/astrbot"
-        echo "建议删除以避免权限问题："
-        echo "   sudo rm -rf /root/.cache/astrbot"
-        echo "============================================================="
-        echo ""
-    fi
+pre_upgrade() {
+    _clean_opt_astrbot
 }
 
 post_install() {
