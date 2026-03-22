@@ -191,9 +191,11 @@ _runuser_with_env() {
 
     if [ "$(id -u)" -eq 0 ] && [ -z "$ASTRBOT_PRIVDROP_DONE" ] && id astrbot >/dev/null 2>&1; then
         export ASTRBOT_PRIVDROP_DONE=1
+        export ASTRBOTCTL_FUNCS="${SCRIPT_DIR}/astrbotctl.functions"
         runuser -u astrbot -- env \
             ASTRBOT_PRIVDROP_DONE="$ASTRBOT_PRIVDROP_DONE" \
-            sh -c 'set -a && . "$1" && set +a && ensure_runtime_dirs && cd "$2" && exec "${@:3}"' \
+            ASTRBOTCTL_FUNCS="$ASTRBOTCTL_FUNCS" \
+            sh -c 'set -a && . "$1" && . "$ASTRBOTCTL_FUNCS" && set +a && ensure_runtime_dirs && cd "$2" && exec "${@:3}"' \
             sh "$env_file" "$runtime_root" "$@"
     else
         (
@@ -435,6 +437,11 @@ run_astrbot() {
 
     cd "$ASTRBOT_ROOT" || exit
     # Source .env so the exec'd Python process gets the correct environment.
+    # "init" is a standalone astrbot command, not a subcommand of "run".
+    # Other commands (like "run") need "run" as the subcommand.
+    local _subcmd="run"
+    [ "${1:-}" = "init" ] && _subcmd="init"
+    local _cmd=( "$venv_astrbot" "$_subcmd" "${@}" )
     exec env -i \
         HOME="$HOME" \
         PATH="$UV_PROJECT_ENVIRONMENT/bin:$PATH" \
@@ -450,7 +457,7 @@ run_astrbot() {
         UV_PYTHON_INSTALL_DIR="$UV_PYTHON_INSTALL_DIR" \
         ASTRBOT_SYSTEMD="$ASTRBOT_SYSTEMD" \
         ASTRBOT_DESKTOP_CLIENT="$ASTRBOT_DESKTOP_CLIENT" \
-        "$venv_astrbot" run "$@"
+        "${_cmd[@]}"
 }
 
 # ─── Diagnostic / info ──────────────────────────────────────────────────────

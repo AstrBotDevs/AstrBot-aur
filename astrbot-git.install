@@ -40,6 +40,10 @@ _clone_app() {
         _stale=1
     fi
 
+    # Ensure the mirror directory exists and mark it as safe for git.
+    install -dm755 -o root -g root "$(dirname "$mirror")"
+    git config --global --add safe.directory "$mirror" 2>/dev/null || true
+
     if [ -d "$mirror" ]; then
         echo ">>> Updating AstrBot from local mirror..."
         git -C "$mirror" fetch --prune origin || {
@@ -48,7 +52,6 @@ _clone_app() {
         }
     else
         echo ">>> Cloning AstrBot (this may take a moment)..."
-        install -dm755 -o root -g root "$(dirname "$mirror")"
         git clone --bare --mirror "$_ASTRBOT_UPSTREAM" "$mirror" || {
             echo "❌ Error: Failed to create mirror at $mirror" >&2
             exit 1
