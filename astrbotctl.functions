@@ -436,12 +436,14 @@ run_astrbot() {
     fi
 
     cd "$ASTRBOT_ROOT" || exit
-    # Source .env so the exec'd Python process gets the correct environment.
-    # "init" is a standalone astrbot command, not a subcommand of "run".
-    # Other commands (like "run") need "run" as the subcommand.
-    local _subcmd="run"
-    [ "${1:-}" = "init" ] && _subcmd="init"
-    local _cmd=( "$venv_astrbot" "$_subcmd" "${@}" )
+    # If no arguments provided, default to running the server 'run' subcommand.
+    # Otherwise, pass through the provided arguments as top-level astrbot subcommands.
+    local _cmd
+    if [ "$#" -eq 0 ]; then
+        _cmd=( "$venv_astrbot" "run" )
+    else
+        _cmd=( "$venv_astrbot" "$@" )
+    fi
     exec env -i \
         HOME="$HOME" \
         PATH="$UV_PROJECT_ENVIRONMENT/bin:$PATH" \

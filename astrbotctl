@@ -25,7 +25,7 @@ __certbot-deploy)
 __run_astrbot)
     instance="${1?}" && shift || exit 1
     load_instance_config
-    run_astrbot "$@"
+    run_astrbot run "$@"
     ;;
 
 # ── cli ───────────────────────────────────────────────────────────────────────
@@ -287,7 +287,7 @@ run)
 
     echo ">>> Starting AstrBot instance: $instance"
 
-    run_astrbot "$@"
+    run_astrbot run "$@"
     ;;
 
 # ── paths ─────────────────────────────────────────────────────────────────────
