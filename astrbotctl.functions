@@ -207,7 +207,7 @@ _runuser_with_env() {
 # Run an astrbot command (from the shared venv) with full runtime env.
 run_astrbot_env_cmd() {
     setup_runtime_env
-    _runuser_with_env "$ASTRBOT_ROOT/data/.env" "$runtime_root" "$@"
+    _runuser_with_env "$ASTRBOT_ROOT/.env" "$runtime_root" "$@"
 }
 
 # Ensure the shared venv is present and synced with the app.
@@ -372,6 +372,7 @@ update_app_git_checkout() {
 run_astrbot() {
     setup_runtime_env
 
+    local env_file="$ASTRBOT_ROOT/.env"
     local venv_python="$UV_PROJECT_ENVIRONMENT/bin/python"
     local venv_astrbot="$UV_PROJECT_ENVIRONMENT/bin/astrbot"
 
@@ -380,14 +381,30 @@ run_astrbot() {
         echo ">>> Initializing virtual environment..."
         [ -d "$UV_PROJECT_ENVIRONMENT" ] && [ ! -x "$venv_python" ] \
             && rm -rf "$UV_PROJECT_ENVIRONMENT"
-        _runuser_with_env "$ASTRBOT_ROOT/data/.env" "$runtime_root" \
+        _runuser_with_env "$env_file" "$runtime_root" \
             uv venv "$UV_PROJECT_ENVIRONMENT" --python 3.12
-        _runuser_with_env "$ASTRBOT_ROOT/data/.env" "$runtime_root" \
+        _runuser_with_env "$env_file" "$runtime_root" \
             uv pip install "$APP_DIR"
     fi
 
     cd "$ASTRBOT_ROOT" || exit
-    exec "$venv_astrbot" "$@"
+    # Source .env so the exec'd Python process gets the correct environment.
+    exec env -i \
+        HOME="$HOME" \
+        PATH="$UV_PROJECT_ENVIRONMENT/bin:$PATH" \
+        ASTRBOT_ROOT="$ASTRBOT_ROOT" \
+        ASTRBOT_HOST="$ASTRBOT_HOST" \
+        ASTRBOT_PORT="$ASTRBOT_PORT" \
+        XDG_CACHE_HOME="$XDG_CACHE_HOME" \
+        XDG_CONFIG_HOME="$XDG_CONFIG_HOME" \
+        XDG_DATA_HOME="$XDG_DATA_HOME" \
+        XDG_STATE_HOME="$XDG_STATE_HOME" \
+        UV_CACHE_DIR="$UV_CACHE_DIR" \
+        UV_PROJECT_ENVIRONMENT="$UV_PROJECT_ENVIRONMENT" \
+        UV_PYTHON_INSTALL_DIR="$UV_PYTHON_INSTALL_DIR" \
+        ASTRBOT_SYSTEMD="$ASTRBOT_SYSTEMD" \
+        ASTRBOT_DESKTOP_CLIENT="$ASTRBOT_DESKTOP_CLIENT" \
+        "$venv_astrbot" "$@"
 }
 
 # ─── Diagnostic / info ──────────────────────────────────────────────────────
