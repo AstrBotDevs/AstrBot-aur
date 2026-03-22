@@ -3,7 +3,7 @@
 pkgname=astrbot-git
 _pkgname=astrbot
 pkgver=4.22.0.r199.g798182fd
-pkgrel=4
+pkgrel=5
 pkgdesc="Agentic IM Chatbot infrastructure (multi-instance, astrbotctl only)"
 arch=('any')
 url="https://github.com/AstrBotDevs/AstrBot"
@@ -29,10 +29,10 @@ install=astrbot-git.install
 prepare() {
     rm -rf "$srcdir/$_pkgname"
 
-    local _retries=3
-    local _count=0
+    local _retries=3 _count=0
     while ((_count < _retries)); do
-        if git clone -b dev --depth=500 "https://github.com/AstrBotDevs/AstrBot.git" "$srcdir/$_pkgname"; then
+        if git clone -b dev --depth=500 \
+            "https://github.com/AstrBotDevs/AstrBot.git" "$srcdir/$_pkgname"; then
             break
         fi
         ((_count++))
@@ -57,23 +57,16 @@ pkgver() {
 }
 
 package() {
+    # Clone the app source.  We do NOT put it under /opt via pacman — the
+    # install script handles /opt/astrbot directly to avoid "conflicting files"
+    # errors on upgrade.  Only copy the LICENSE (from the clone) here.
     cd "$srcdir/$_pkgname"
-
-    local _appdir="/opt/$_pkgname"
-
-    install -d "$pkgdir$_appdir"
-    cp -r astrbot scripts pyproject.toml README.md LICENSE "$pkgdir$_appdir/"
-
-    install -Dm644 "$srcdir/tmpl.conf" "$pkgdir/etc/astrbot/tmpl.conf"
-
-    install -Dm755 "$srcdir/astrbotctl" \
-        "$pkgdir/usr/bin/astrbotctl"
-
-    install -Dm644 "$srcdir/astrbotctl.functions" \
-        "$pkgdir/usr/bin/astrbotctl.functions"
-
-    install -Dm644 "$srcdir/astrbot@.service" \
-        "$pkgdir/usr/lib/systemd/system/astrbot@.service"
-
     install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+
+    install -Dm644 "$srcdir/tmpl.conf"       "$pkgdir/etc/astrbot/tmpl.conf"
+    install -Dm755 "$srcdir/astrbotctl"      "$pkgdir/usr/bin/astrbotctl"
+    install -Dm644 "$srcdir/astrbotctl.functions" \
+                                                  "$pkgdir/usr/bin/astrbotctl.functions"
+    install -Dm644 "$srcdir/astrbot@.service" \
+                                                  "$pkgdir/usr/lib/systemd/system/astrbot@.service"
 }

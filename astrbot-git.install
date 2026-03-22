@@ -1,14 +1,21 @@
 #!/bin/bash
-# shellcheck disable=SC2173
+# shellcheck shell=bash
 set -e
 
-_ensure_environment() {
+_ASTRBOT_UPSTREAM="https://github.com/AstrBotDevs/AstrBot.git"
+_ASTRBOT_BRANCH="dev"
+
+# ─── Guards ───────────────────────────────────────────────────────────────────
+_ensure_root() {
     if [ "$(id -u)" -ne 0 ]; then
         echo "❌ Error: This script must be run as root (sudo)."
         exit 1
     fi
+}
 
-    if ! getent passwd astrbot >/dev/null; then
+# ─── Environment setup ─────────────────────────────────────────────────────────
+_ensure_environment() {
+    if ! getent passwd astrbot >/dev/null 2>&1; then
         useradd -r -M -d /var/lib/astrbot -s /usr/bin/nologin -c "AstrBot Service User" astrbot
     fi
 
@@ -18,55 +25,68 @@ _ensure_environment() {
 
     [ -d "/var/lib/astrbot" ] && chown -R astrbot:astrbot /var/lib/astrbot
     [ -d "/var/cache/astrbot" ] && chown -R astrbot:astrbot /var/cache/astrbot
-    [ -d "/opt/astrbot" ] && chmod -R o+rx /opt/astrbot
 }
 
-# Remove the entire /opt/astrbot directory before install/upgrade so that
-# pacman never sees "file exists in filesystem" conflicts from leftover files.
-_clean_opt_astrbot() {
+# ─── App clone ────────────────────────────────────────────────────────────────
+# Clone or update /opt/astrbot from the git mirror.
+# The mirror lives in /var/cache/astrbot/astrbot-git to save bandwidth.
+_clone_app() {
+    local mirror="/var/cache/astrbot/astrbot-git"
+
+    # Remove stale /opt/astrbot so pacman never sees it as a tracked file conflict.
     if [ -d "/opt/astrbot" ]; then
-        echo ">>> Removing existing /opt/astrbot (upgrading)..."
+        echo ">>> Removing stale /opt/astrbot..."
         rm -rf /opt/astrbot
     fi
+
+    if [ -d "$mirror" ]; then
+        echo ">>> Updating AstrBot from local mirror..."
+        git -C "$mirror" fetch --prune origin
+    else
+        echo ">>> Cloning AstrBot (this may take a moment)..."
+        install -dm755 -o root -g root "$(dirname "$mirror")"
+        git clone --bare --mirror "$_ASTRBOT_UPSTREAM" "$mirror"
+    fi
+
+    echo ">>> Checking out AstrBot (dev branch)..."
+    git clone -b "$_ASTRBOT_BRANCH" --depth=500 "file://$mirror" /opt/astrbot
 }
 
+# ─── Hooks ─────────────────────────────────────────────────────────────────────
+
 pre_install() {
-    _clean_opt_astrbot
+    _ensure_root
+    _clone_app
 }
 
 pre_upgrade() {
-    _clean_opt_astrbot
+    _ensure_root
+    _clone_app
 }
 
 post_install() {
+    _ensure_root
     _ensure_environment
     systemctl daemon-reload
 
     echo "-------------------------------------------------------------------"
-    echo "AstrBot 已安装（多实例支持，仅使用 astrbotctl）"
+    echo "AstrBot 已安装（多实例支持）"
     echo ""
     echo "【创建实例】"
     echo "  sudo astrbotctl init <实例名>              # 初始化新实例"
     echo "  sudo astrbotctl init -f <备份> <实例名>   # 从备份初始化"
-    echo "  sudo astrbotctl cp <src> <dest>            # 复制实例"
     echo ""
     echo "【运行服务】"
     echo "  sudo systemctl start  astrbot@<实例名>"
     echo "  sudo systemctl enable --now astrbot@<实例名>"
     echo ""
     echo "【常用管理】"
-    echo "  sudo astrbotctl stop   <实例名>   # 停止"
-    echo "  sudo astrbotctl status <实例名>   # 状态"
-    echo "  sudo astrbotctl list              # 列出所有实例"
-    echo "  sudo astrbotctl reset  <实例名>   # 重置配置"
+    echo "  sudo astrbotctl list / stop / status <实例名>"
+    echo "  sudo astrbotctl reset <实例名>   # 重置配置"
     echo ""
     echo "【备份与恢复】"
-    echo "  astrbotctl export <实例名>              # 导出备份"
-    echo "  astrbotctl import <实例名> <备份文件>  # 导入备份"
-    echo ""
-    echo "【插件与配置】"
-    echo "  astrbotctl cli <实例名> plug list       # 查看插件"
-    echo "  astrbotctl admin <实例名>               # 修改后台密码"
+    echo "  astrbotctl export <实例名>              # 导出"
+    echo "  astrbotctl import <实例名> <备份文件>  # 导入"
     echo ""
     echo "【文件路径】"
     echo "  代码目录：     /opt/astrbot"
@@ -77,40 +97,29 @@ post_install() {
 }
 
 post_upgrade() {
+    _ensure_root
     _ensure_environment
     systemctl daemon-reload
 
     echo "-------------------------------------------------------------------"
-    echo "AstrBot 已更新（多实例版本）"
+    echo "AstrBot 已更新"
     echo ""
     echo "【快速开始】"
     echo "  sudo astrbotctl init light              # 创建首个实例"
-    echo "  sudo systemctl start  astrbot@light    # 启动"
-    echo "  sudo systemctl enable --now astrbot@light  # 开机自启"
+    echo "  sudo systemctl enable --now astrbot@light"
     echo ""
     echo "【更新代码】"
-    echo "  sudo astrbotctl git pull --sync        # 更新到最新 dev"
+    echo "  sudo pacman -Syu  # 通过本包更新代码"
     echo ""
-    echo "【查看日志】"
-    echo "  journalctl -u astrbot@light -f"
-    echo ""
-    echo "【文件路径】"
-    echo "  数据目录：     /var/lib/astrbot/<实例名>"
-    echo "  配置文件：     /etc/astrbot/<实例名>.conf"
-    echo ""
-    echo "⚠️  如遇异常，请尝试重建 Python 环境："
-    echo "    sudo astrbotctl git pull --sync --rebuild-venv <实例名>"
+    echo "【如遇异常】"
+    echo "  sudo astrbotctl git pull --sync --rebuild-venv <实例名>"
     echo "-------------------------------------------------------------------"
 }
 
 post_remove() {
-    if [ "$(id -u)" -ne 0 ]; then
-        echo "❌ Error: This script must be run as root (sudo)."
-        exit 1
-    fi
-
+    _ensure_root
     echo "-------------------------------------------------------------------"
-    echo "⚠️  数据未删除，如需彻底清理："
+    echo "⚠️  代码已删除，数据未删除。如需彻底清理："
     echo "   sudo rm -rf /var/lib/astrbot /var/cache/astrbot /etc/astrbot"
     echo "   sudo userdel astrbot"
     echo "-------------------------------------------------------------------"
