@@ -331,7 +331,8 @@ admin)
     [ ! -d "$ASTRBOT_ROOT" ] && { echo "❌ Error: Instance directory $ASTRBOT_ROOT does not exist." >&2; exit 1; }
 
     # conf is a top-level astrbot subcommand, not a subcommand of 'run'.
-    # We bypass run_astrbot and invoke astrbot directly with the instance venv.
+    # We bypass run_astrbot and invoke astrbot directly.
+    setup_runtime_env
     cd "$ASTRBOT_ROOT" || exit
     if [ -n "$username" ]; then
         "$UV_PROJECT_ENVIRONMENT/bin/astrbot" conf set dashboard.username "$username"
