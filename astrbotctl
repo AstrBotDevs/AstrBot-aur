@@ -3,26 +3,15 @@ set -e
 
 # ─── Locate script and load shared functions ──────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd || printf '%s' ".")"
+# shellcheck source=astrbotctl.functions
 . "${SCRIPT_DIR}/astrbotctl.functions"
-
-# ─── Parse global flags ───────────────────────────────────────────────────────
-_parse_legacy_flags() {
-    while [ "$#" -gt 0 ]; do
-        case "$1" in
-        -h | --help)
-            print_help; exit 0 ;;
-        -*)
-            echo "❌ Error: Unknown option: $1" >&2; exit 1 ;;
-        *)  break ;;
-        esac
-    done
-}
 
 # ─── Entry point ──────────────────────────────────────────────────────────────
 cmd="${1:-}"
 [ -n "$cmd" ] && shift
 
 case "$cmd" in
+
 # ── Internal: called by certbot deploy hook ───────────────────────────────────
 __certbot-deploy)
     instance="${1?}" && shift || exit 1
@@ -40,8 +29,7 @@ __run_astrbot)
 
 # ── init ─────────────────────────────────────────────────────────────────────
 init)
-    local backup_file=""
-    instance=""
+    backup_file="" instance=""
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -58,8 +46,8 @@ init)
     require_instance
     require_root
 
-    local conf_file="${CONFIG_DIR}/${instance}.conf"
-    local astrbot_root="${SYSTEM_ROOT}/${instance}"
+    conf_file="${CONFIG_DIR}/${instance}.conf"
+    astrbot_root="${SYSTEM_ROOT}/${instance}"
 
     [ -n "$backup_file" ] && [ ! -f "$backup_file" ] && \
         { echo "❌ Error: Backup file not found: $backup_file" >&2; exit 1; }
@@ -70,7 +58,7 @@ init)
     install -dm755 -o astrbot -g astrbot "$astrbot_root"
     find_free_port 3000
 
-    local tmpl_file="/etc/astrbot/tmpl.conf"
+    tmpl_file="/etc/astrbot/tmpl.conf"
     [ ! -f "$tmpl_file" ] && { echo "❌ Error: Config template not found at $tmpl_file" >&2; exit 1; }
 
     export INSTANCE_NAME="$instance" ASTRBOT_HOST="0.0.0.0" ASTRBOT_PORT ASTRBOT_ROOT="$astrbot_root"
@@ -104,11 +92,12 @@ init)
 # ── cp ────────────────────────────────────────────────────────────────────────
 cp)
     require_root
-    local src="${2?Usage: astrbotctl cp <source_instance> <dest_instance>}"
-    local dst="${3?Usage: astrbotctl cp <source_instance> <dest_instance>}"
+    src="${2?Usage: astrbotctl cp <source_instance> <dest_instance>}"
+    dst="${3?Usage: astrbotctl cp <source_instance> <dest_instance>}"
 
-    local src_root="${SYSTEM_ROOT}/${src}" dst_root="${SYSTEM_ROOT}/${dst}"
-    local dst_conf="${CONFIG_DIR}/${dst}.conf"
+    src_root="${SYSTEM_ROOT}/${src}"
+    dst_root="${SYSTEM_ROOT}/${dst}"
+    dst_conf="${CONFIG_DIR}/${dst}.conf"
 
     [ ! -d "$src_root" ] && { echo "❌ Error: Source instance '$src' does not exist." >&2; exit 1; }
     [ -d "$dst_root"   ] && { echo "❌ Error: Destination directory '$dst_root' already exists." >&2; exit 1; }
@@ -120,12 +109,10 @@ cp)
     chown -R astrbot:astrbot "$dst_root"
 
     # Reuse unified port allocation
-    instance="$src"
-    load_instance_config
-    instance="$dst"
-    find_free_port 3000
+    instance="$src"; load_instance_config
+    instance="$dst"; find_free_port 3000
 
-    local tmpl_file="/etc/astrbot/tmpl.conf"
+    tmpl_file="/etc/astrbot/tmpl.conf"
     [ ! -f "$tmpl_file" ] && {
         echo "❌ Error: Config template not found at $tmpl_file" >&2
         rm -rf "$dst_root"
@@ -151,7 +138,6 @@ rm)
     require_root
     require_instance
 
-    local conf_file venv_dir certbot_managed certbot_cert_name
     conf_file="$(conf_file)"
     venv_dir="$(venv_dir)"
 
@@ -210,14 +196,14 @@ certbot)
     command -v certbot >/dev/null 2>&1 || { echo "❌ Error: certbot is not installed." >&2; exit 1; }
 
     load_instance_config
-    local conf_file
     conf_file="$(conf_file)"
 
     [ ! -d "$ASTRBOT_ROOT" ] || [ ! -f "$conf_file" ] && \
         { echo "❌ Error: Instance '$instance' is not initialized." >&2; exit 1; }
 
-    local domains="${ASTRBOT_CERTBOT_DOMAINS:-}" email="${ASTRBOT_CERTBOT_EMAIL:-}"
-    local cert_name="astrbot-${instance}"
+    domains="${ASTRBOT_CERTBOT_DOMAINS:-}"
+    email="${ASTRBOT_CERTBOT_EMAIL:-}"
+    cert_name="astrbot-${instance}"
 
     printf "Domains for %s (space-separated) [%s]: " "$instance" "$domains"
     read -r d && [ -z "$d" ] && d="$domains"
@@ -230,7 +216,7 @@ certbot)
     email="$e"
 
     # Build -d arguments
-    local domain_args=""
+    domain_args=""
     for domain in $domains; do
         domain_args="$domain_args -d $domain"
     done
@@ -249,7 +235,6 @@ certbot)
 
     sync_certbot_cert_for_instance "$cert_name"
 
-    local cert_dir cert_file key_file
     cert_dir="$(certbot_instance_cert_dir)"
     cert_file="$cert_dir/fullchain.pem"
     key_file="$cert_dir/privkey.pem"
@@ -285,7 +270,8 @@ run)
         exit 1
     }
 
-    local run_host="${ASTRBOT_HOST:-0.0.0.0}" run_port="${ASTRBOT_PORT:-}"
+    run_host="${ASTRBOT_HOST:-0.0.0.0}"
+    run_port="${ASTRBOT_PORT:-}"
 
     echo ">>> Starting AstrBot instance: $instance"
     echo ">>> Host: $run_host  Port: ${run_port:-default}"
@@ -320,10 +306,9 @@ start|stop|restart|enable|disable|status)
     systemctl "$cmd" "astrbot@$instance"
     ;;
 
-# ── admin ──────────────────────────────────────────────────────────────────────
+# ── admin ─────────────────────────────────────────────────────────────────────
 admin)
-    local username="" password=""
-    instance=""
+    username="" password="" instance=""
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -357,23 +342,22 @@ admin)
 
 # ── export ─────────────────────────────────────────────────────────────────────
 export)
-    local output_dir="" sign=0 encrypt="" symmetric=0 digest=""
-    instance=""
+    output_dir="" sign=0 encrypt="" symmetric=0 digest="" instance=""
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
-        -o|--output)    [ -z "${2:-}" ] && { echo "❌ Error: Missing output dir after $1" >&2; exit 1; }
-                        output_dir="$2"; shift 2 ;;
-        -E|--gpg-encrypt) [ -z "${2:-}" ] && { echo "❌ Error: Missing recipient after $1" >&2; exit 1; }
-                        encrypt="$2"; shift 2 ;;
-        -d|--digest)    [ -z "${2:-}" ] && { echo "❌ Error: Missing algorithm after $1" >&2; exit 1; }
-                        digest="$2"; shift 2 ;;
-        -S|--gpg-sign)  sign=1; shift ;;
+        -o|--output)        [ -z "${2:-}" ] && { echo "❌ Error: Missing output dir after $1" >&2; exit 1; }
+                            output_dir="$2"; shift 2 ;;
+        -E|--gpg-encrypt)   [ -z "${2:-}" ] && { echo "❌ Error: Missing recipient after $1" >&2; exit 1; }
+                            encrypt="$2"; shift 2 ;;
+        -d|--digest)        [ -z "${2:-}" ] && { echo "❌ Error: Missing algorithm after $1" >&2; exit 1; }
+                            digest="$2"; shift 2 ;;
+        -S|--gpg-sign)      sign=1; shift ;;
         -C|--gpg-symmetric) symmetric=1; shift ;;
-        -h|--help)      echo "Usage: astrbotctl export [options] <name>"; exit 0 ;;
-        -*)             echo "❌ Error: Unknown option: $1" >&2; exit 1 ;;
-        *)              [ -n "$instance" ] && { echo "❌ Error: Unexpected extra argument: $1" >&2; exit 1; }
-                        instance="$1"; shift ;;
+        -h|--help)          echo "Usage: astrbotctl export [options] <name>"; exit 0 ;;
+        -*)                 echo "❌ Error: Unknown option: $1" >&2; exit 1 ;;
+        *)                  [ -n "$instance" ] && { echo "❌ Error: Unexpected extra argument: $1" >&2; exit 1; }
+                            instance="$1"; shift ;;
         esac
     done
 
@@ -381,7 +365,8 @@ export)
     load_instance_config
     [ ! -d "$ASTRBOT_ROOT" ] && { echo "❌ Error: Instance directory $ASTRBOT_ROOT does not exist." >&2; exit 1; }
 
-    local -a cmd_args=(bk export)
+    # shellcheck disable=SC2206
+    cmd_args=(bk export)
     [ -n "$output_dir" ] && cmd_args+=(-o "$output_dir")
     [ "$sign" -eq 1 ]   && cmd_args+=(-S)
     [ -n "$encrypt" ]   && cmd_args+=(-E "$encrypt")
@@ -392,8 +377,7 @@ export)
 
 # ── import ─────────────────────────────────────────────────────────────────────
 import)
-    local backup_file="" yes=0
-    instance=""
+    backup_file="" yes=0 instance=""
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -401,8 +385,8 @@ import)
         -h|--help) echo "Usage: astrbotctl import [-y] <name> <backup_file>"; exit 0 ;;
         -*)        echo "❌ Error: Unknown option: $1" >&2; exit 1 ;;
         *)
-            [ -z "$instance" ]   && { instance="$1"; shift; continue; }
-            [ -z "$backup_file" ] && { backup_file="$1"; shift; continue; }
+            [ -z "$instance" ]      && { instance="$backup_file"; shift; continue; }
+            [ -z "$backup_file" ]   && { backup_file="$1"; shift; continue; }
             echo "❌ Error: Unexpected extra argument: $1" >&2; exit 1
             ;;
         esac
@@ -420,7 +404,6 @@ import)
 # ── list ──────────────────────────────────────────────────────────────────────
 list)
     echo "=== AstrBot Instances ==="
-    local instances
     instances=$(iter_instances)
     if [ -n "$instances" ]; then
         printf '%s\n' "$instances"
@@ -440,7 +423,7 @@ git)
     *)    echo "❌ Error: Unknown git subcommand: $1" >&2; exit 1 ;;
     esac
 
-    local sync=0 rebuild_venv=0 target="" all=0
+    sync=0 rebuild_venv=0 target="" all=0
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -448,8 +431,8 @@ git)
         --rebuild-venv) sync=1; rebuild_venv=1; shift ;;
         --all)          all=1; shift ;;
         -h|--help)      echo "Usage: sudo astrbotctl git pull [--sync] [--rebuild-venv] [instance|--all]"; exit 0 ;;
-        -*)             echo "❌ Error: Unknown option: $1" >&2; exit 1 ;;
-        *)              [ -n "$target" ] && { echo "❌ Error: Unexpected extra argument: $1" >&2; exit 1; }
+        -*)              echo "❌ Error: Unknown option: $1" >&2; exit 1 ;;
+        *)               [ -n "$target" ] && { echo "❌ Error: Unexpected extra argument: $1" >&2; exit 1; }
                          target="$1"; shift ;;
         esac
     done

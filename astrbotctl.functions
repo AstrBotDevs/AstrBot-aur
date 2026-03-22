@@ -1,4 +1,6 @@
 # astrbotctl - shared functions library
+# shellcheck shell=bash
+# shellcheck source=astrbotctl
 # Source this file: . "$(dirname "$0")/astrbotctl.functions"
 
 # ─── Constants (can be overridden before sourcing) ────────────────────────────
@@ -78,11 +80,12 @@ load_instance_config() {
 # Find a free port starting from $1 (default 3000).
 # Checks both assigned ports in config files and currently listening ports.
 find_free_port() {
-    local start_port="${1:-3000}" p port_used
+    local start_port="${1:-3000}" port_used
 
     # Collect used ports from config files.  Using find avoids zsh glob issues.
     local used_line
-    used_line=$(find "$CONFIG_DIR" -maxdepth 1 -name '*.conf' -type f 2>/dev/null \
+    # shellcheck disable=SC2261
+    used_line=$(find "$CONFIG_DIR" -maxdepth 1 -name '*.conf' -type f \
         -exec grep -h '^ASTRBOT_PORT=' {} + 2>/dev/null \
         | cut -d= -f2 | tr '\n' ' ')
 
@@ -194,7 +197,8 @@ _runuser_with_env() {
     else
         (
             set -a && . "$env_file" && set +a
-            ensure_runtime_dirs && cd "$runtime_root" && exec "$@"
+            ensure_runtime_dirs && cd "$runtime_root" || return
+            exec "$@"
         )
     fi
 }
@@ -226,7 +230,7 @@ ensure_instance_env_synced() {
 # Render /etc/astrbot/tmpl.conf (or $SCRIPT_DIR/tmpl.conf) into an instance config.
 # Handles port auto-assignment automatically.
 render_config_from_template() {
-    local tmpl_file template_file conf_file
+    local tmpl_file conf_file
 
     tmpl_file="/etc/astrbot/tmpl.conf"
     if [ ! -f "$tmpl_file" ]; then
@@ -298,9 +302,9 @@ sync_certbot_cert_for_instance() {
     local group_g=""
     getent group astrbot >/dev/null 2>&1 && group_g="-g astrbot"
 
-    install -d -m750 -o root $group_g "$dest_dir"
-    install -m640 -o root $group_g "$src_cert" "$dest_dir/fullchain.pem"
-    install -m640 -o root $group_g "$src_key"  "$dest_dir/privkey.pem"
+    install -d -m750 -o root "$group_g" "$dest_dir"
+    install -m640 -o root "$group_g" "$src_cert" "$dest_dir/fullchain.pem"
+    install -m640 -o root "$group_g" "$src_key"  "$dest_dir/privkey.pem"
 }
 
 # Write the certbot deploy hook that triggers __certbot-deploy on renewal.
@@ -311,7 +315,7 @@ install_certbot_deploy_hook() {
     local group_g=""
     getent group astrbot >/dev/null 2>&1 && group_g="-g astrbot"
 
-    install -d -m755 $group_g /etc/letsencrypt/renewal-hooks/deploy
+    install -d -m755 "$group_g" /etc/letsencrypt/renewal-hooks/deploy
     cat >"$hook_path" <<EOF
 #!/bin/sh
 set -e
@@ -374,7 +378,7 @@ run_astrbot() {
             uv pip install "$APP_DIR"
     fi
 
-    [ -d "$ASTRBOT_ROOT" ] && cd "$ASTRBOT_ROOT"
+    [ -d "$ASTRBOT_ROOT" ] && cd "$ASTRBOT_ROOT" || exit
     exec "$venv_astrbot" "$@"
 }
 
