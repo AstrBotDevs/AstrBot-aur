@@ -214,6 +214,9 @@ run_astrbot_env_cmd() {
 ensure_instance_env_synced() {
     setup_runtime_env
 
+    # Self-heal app dir before syncing
+    _ensure_app_dir || return 1
+
     if [ ! -d "$UV_PROJECT_ENVIRONMENT" ]; then
         echo ">>> Creating virtual environment for instance: $instance"
         run_astrbot_env_cmd uv venv "$UV_PROJECT_ENVIRONMENT" --python 3.12
@@ -350,9 +353,46 @@ ensure_app_git_repo() {
     if [ ! -d "$mirror" ]; then
         echo ">>> Creating local git mirror..."
         install -d -m755 "$mirror"
-        git clone --bare --mirror "$UPSTREAM_URL" "$mirror"
+        git clone --bare --mirror "$UPSTREAM_URL" "$mirror" || {
+            echo "❌ Error: Failed to create git mirror at $mirror" >&2
+            return 1
+        }
     fi
     git -C "$mirror" fetch --prune origin
+}
+
+# Ensure /opt/astrbot exists.  If missing, attempt self-healing by cloning
+# from the git mirror.  Requires root privileges.
+_ensure_app_dir() {
+    if [ -d "$APP_DIR" ] && [ -f "$APP_DIR/pyproject.toml" ]; then
+        return 0
+    fi
+
+    # Don't auto-heal if a non-default APP_DIR is set (user knows what they're doing)
+    if [ "$APP_DIR" != "/opt/astrbot" ]; then
+        echo "❌ Error: APP_DIR $APP_DIR does not exist." >&2
+        return 1
+    fi
+
+    echo "⚠️  /opt/astrbot is missing — attempting self-heal..." >&2
+    echo "   (Run 'sudo pacman -Syu' for a proper fix)" >&2
+
+    local mirror="$CACHE_DIR/astrbot-git"
+
+    # Try the mirror first
+    if [ -d "$mirror" ]; then
+        echo ">>> Cloning from local mirror..."
+        git clone -b "$UPSTREAM_BRANCH" --depth=500 "file://$mirror" "$APP_DIR" 2>/dev/null && return 0
+        echo "⚠️  Mirror clone failed, trying direct..." >&2
+    fi
+
+    # Direct clone as last resort (requires network)
+    echo ">>> Cloning directly from GitHub..."
+    git clone -b "$UPSTREAM_BRANCH" --depth=500 "$UPSTREAM_URL" "$APP_DIR" && return 0
+
+    echo "❌ CRITICAL: /opt/astrbot is missing and self-heal failed." >&2
+    echo "   Run 'sudo pacman -Syu' or 'sudo git clone -b $UPSTREAM_BRANCH $UPSTREAM_URL $APP_DIR'" >&2
+    return 1
 }
 
 update_app_git_checkout() {
@@ -371,6 +411,12 @@ update_app_git_checkout() {
 # Called directly by systemd (__run_astrbot) or by 'astrbotctl run'.
 run_astrbot() {
     setup_runtime_env
+
+    # Self-heal: try to restore /opt/astrbot if it's gone
+    _ensure_app_dir || {
+        echo "❌ Error: /opt/astrbot is missing. Cannot start AstrBot." >&2
+        exit 1
+    }
 
     local env_file="$ASTRBOT_ROOT/.env"
     local venv_python="$UV_PROJECT_ENVIRONMENT/bin/python"
