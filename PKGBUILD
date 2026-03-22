@@ -19,10 +19,13 @@ source=(
     "astrbotctl"
     "astrbotctl.functions"
     "astrbot@.service"
+    "astrbot-update.timer"
+    "astrbot-update.service"
+    "update.conf.example"
     "tmpl.conf"
 )
 
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 install=astrbot-git.install
 
@@ -64,9 +67,15 @@ package() {
     install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 
     install -Dm644 "$srcdir/tmpl.conf"       "$pkgdir/etc/astrbot/tmpl.conf"
+    install -Dm644 "$srcdir/update.conf.example" \
+                                                  "$pkgdir/usr/share/doc/astrbot-git/update.conf.example"
     install -Dm755 "$srcdir/astrbotctl"      "$pkgdir/usr/bin/astrbotctl"
     install -Dm644 "$srcdir/astrbotctl.functions" \
                                                   "$pkgdir/usr/bin/astrbotctl.functions"
     install -Dm644 "$srcdir/astrbot@.service" \
                                                   "$pkgdir/usr/lib/systemd/system/astrbot@.service"
+    install -Dm644 "$srcdir/astrbot-update.timer" \
+                                                  "$pkgdir/usr/lib/systemd/system/astrbot-update.timer"
+    install -Dm644 "$srcdir/astrbot-update.service" \
+                                                  "$pkgdir/usr/lib/systemd/system/astrbot-update.service"
 }

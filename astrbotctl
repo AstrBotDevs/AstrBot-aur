@@ -474,22 +474,42 @@ git)
     ;;
 
 # ── update ───────────────────────────────────────────────────────────────────
-# Unified update: pull AUR package + rebuild venv + restart instance.
-# This is the recommended way to update astrbotctl and astrbot source.
+# Unified update with atomic rollback via overlayfs snapshot.
+#
+# Flow:
+#   1. Take git snapshot of current /opt/astrbot state
+#   2. Mount overlayfs snapshot (updates go to upper layer)
+#   3. Pull AUR package (new code via overlay)
+#   4. Rebuild instance venv
+#   5. Restart instance and monitor for STABILITY_SECS
+#   6. If stable: commit overlay changes, done
+#      If fails: automatic rollback (unmount overlay, original restored)
+#
 update)
-    instance="" all=0
+    instance="" all=0 auto_rollback=1 stability_secs="${UPDATE_STABILITY_SECS:-60}"
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
         --all) all=1; shift ;;
+        --no-rollback) auto_rollback=0; shift ;;
+        --stability-secs)
+            stability_secs="${2:?}"; shift 2 ;;
         -h|--help) cat <<'USAGE'
-Usage: sudo astrbotctl update [instance|--all]
+Usage: sudo astrbotctl update [instance|--all] [options]
 
-Update astrbot: pull latest AUR package, rebuild venv, restart instance.
+Update astrbot with atomic rollback via overlayfs snapshot.
+Pull AUR package, rebuild venv, restart instance, monitor stability.
+
+Options:
+  --all                  Update all instances
+  --no-rollback          Skip automatic rollback on failure
+  --stability-secs N     Seconds to monitor for stability (default: 60)
+  -h, --help             Show this help
 
 Examples:
-  sudo astrbotctl update light         # Update light instance
-  sudo astrbotctl update --all         # Update all instances
+  sudo astrbotctl update light                  # Update light instance
+  sudo astrbotctl update --all                 # Update all instances
+  sudo astrbotctl update light --stability-secs 120   # Monitor 2 minutes
 USAGE
 exit 0 ;;
         -*) echo "❌ Error: Unknown option: $1" >&2; exit 1 ;;
@@ -511,48 +531,151 @@ exit 0 ;;
         echo ">>> Updating instance: $instance"
     fi
 
+    # ── Pre-flight checks ──────────────────────────────────────────────────
+
+    # rsync is optional (cp -a is used as fallback for committing overlay changes)
+
+    # ── Step 1: Git snapshot (extra safety net) ─────────────────────────────
+
     echo ""
-    echo "[1/4] Fixing broken dashboard symlink..."
+    echo "[1/7] Taking git snapshot of current state..."
+    take_git_snapshot
+    SNAP_TAG="$_SNAP_TAG"
+
+    # ── Step 2: Mount overlay snapshot ───────────────────────────────────────
+
+    echo ""
+    echo "[2/7] Mounting overlayfs snapshot..."
+    if ! mount_overlay_snapshot; then
+        echo "❌ Overlay mount failed. Falling back to git snapshot only."
+        auto_rollback=0
+    fi
+
+    # ── Step 3: Fix broken dashboard symlink ─────────────────────────────────
+
+    echo ""
+    echo "[3/7] Fixing broken dashboard symlink in overlay..."
     _fix_dashboard_symlink() {
-        local _dist_src="/opt/astrbot/astrbot/dashboard/dist"
-        local _dist_dst="/opt/astrbot/dashboard/dist"
-        if [ -L "$_dist_src" ] && [ ! -e "$_dist_src" ]; then
-            rm -f "$_dist_src"
-            mkdir -p "$(dirname "$_dist_dst")"
-            ln -s "$_dist_dst" "$_dist_src"
-            echo ">>> Dashboard symlink fixed."
+        local _dist_link="/opt/astrbot/astrbot/dashboard/dist"
+        if [ -L "$_dist_link" ] && [ ! -e "$_dist_link" ]; then
+            echo ">>> Removing broken dashboard dist symlink..."
+            rm -f "$_dist_link"
+            mkdir -p "$_dist_link"
         fi
     }
     _fix_dashboard_symlink
 
+    # ── Step 4: Pull AUR package ─────────────────────────────────────────────
+
     echo ""
-    echo "[2/4] Pulling AUR package..."
+    echo "[4/7] Pulling AUR package..."
+    UPDATE_OK=0
     if command -v paru >/dev/null 2>&1; then
-        # Try as lightjunction first (paru config is per-user)
-        sudo -u lightjunction paru -Syu --noconfirm 2>&1 || \
-            { echo "⚠️  paru update failed, trying makepkg..."; }
+        if sudo -u lightjunction paru -Syu astrbot-git --noconfirm 2>&1; then
+            UPDATE_OK=1
+        else
+            echo "⚠️  paru update failed."
+        fi
     else
         echo "⚠️  paru not found, skipping AUR package update."
     fi
 
-    for inst in $instances; do
-        load_instance_config
-        [ ! -d "$ASTRBOT_ROOT" ] && { echo "⚠️  Instance $inst directory missing, skipping."; continue; }
+    # Also sync /opt/astrbot from mirror to get latest source
+    echo ">>> Syncing /opt/astrbot from git mirror..."
+    update_app_git_checkout 2>/dev/null || true
 
-        echo ""
-        echo "[3/4] Rebuilding venv for: $inst"
-        rm -rf "$CACHE_DIR/venv-$inst"
-        ensure_instance_env_synced
-
-        echo ""
-        echo "[4/4] Restarting: $inst"
-        systemctl restart "astrbot@$inst" 2>/dev/null || \
-            echo "⚠️  Could not restart (may not be enabled)"
-    done
+    # ── Step 5: Rebuild venv and restart instance ─────────────────────────────
 
     echo ""
-    echo "=== ✅ Update complete ==="
+    echo "[5/7] Rebuilding venv and restarting instances..."
+    _update_instance() {
+        local inst="$1"
+        load_instance_config
+        if [ ! -d "$ASTRBOT_ROOT" ]; then
+            echo "⚠️  Instance $inst directory missing, skipping."
+            return 0
+        fi
+
+        echo ">>> Rebuilding venv for: $inst"
+        rm -rf "$CACHE_DIR/venv-$inst"
+
+        # Fix symlink in new source tree before syncing venv
+        if [ -L "/opt/astrbot/astrbot/dashboard/dist" ] && [ ! -e "/opt/astrbot/astrbot/dashboard/dist" ]; then
+            rm -f "/opt/astrbot/astrbot/dashboard/dist"
+            mkdir -p "/opt/astrbot/astrbot/dashboard/dist"
+        fi
+
+        if ! ensure_instance_env_synced 2>&1; then
+            echo "⚠️  Failed to sync environment for $inst"
+            return 1
+        fi
+
+        echo ">>> Stopping: $inst"
+        systemctl stop "astrbot@$inst" 2>/dev/null || true
+
+        echo ">>> Starting: $inst"
+        if ! systemctl start "astrbot@$inst"; then
+            echo "⚠️  Failed to start $inst"
+            return 1
+        fi
+        return 0
+    }
+
+    FAILED_INSTANCES=""
+    for inst in $instances; do
+        if ! _update_instance "$inst"; then
+            FAILED_INSTANCES="$FAILED_INSTANCES $inst"
+        fi
+    done
+
+    # ── Step 6: Stability monitoring ────────────────────────────────────────
+
+    echo ""
+    echo "[6/7] Monitoring stability for ${stability_secs}s..."
+
+    STABLE=1
+    for inst in $instances; do
+        echo ">>> Checking stability: $inst"
+        for i in $(seq 1 "$stability_secs"); do
+            sleep 1
+            if ! systemctl is-active --quiet "astrbot@$inst" 2>/dev/null; then
+                echo "⚠️  Instance $inst crashed at ${i}s (auto-rollback=$auto_rollback)"
+                STABLE=0
+                break
+            fi
+            printf "    %s running... %ds/%ds\r" "$inst" "$i" "$stability_secs"
+        done
+        echo ""
+    done
+
+    # ── Step 7: Commit or rollback ───────────────────────────────────────────
+
+    echo ""
+    if [ "$STABLE" -eq 1 ] && [ -z "$FAILED_INSTANCES" ]; then
+        echo "[7/7] All instances stable. Committing overlay changes..."
+        if is_overlay_mounted; then
+            commit_overlay_and_unmount
+        fi
+        echo ""
+        echo "=== ✅ Update complete and committed ==="
+        echo "    Git snapshot preserved: $SNAP_TAG (for manual rollback if needed)"
+        echo "    To manually rollback: git -C /opt/astrbot reset --hard $SNAP_TAG"
+    else
+        echo "[7/7] Stability check FAILED. Initiating rollback..."
+        if [ "$auto_rollback" -eq 1 ] && is_overlay_mounted; then
+            rollback_overlay
+            rollback_git_snapshot
+        else
+            echo "⚠️  Auto-rollback disabled. Manual rollback required:"
+            echo "    git -C /opt/astrbot reset --hard $SNAP_TAG"
+        fi
+        echo ""
+        echo "=== ❌ Update failed and rolled back ==="
+        [ -n "$FAILED_INSTANCES" ] && echo "    Failed instances:$FAILED_INSTANCES"
+        exit 1
+    fi
     ;;
+
 
 # ── help / unknown ─────────────────────────────────────────────────────────────
 -h|--help|"") print_help; exit 0 ;;
