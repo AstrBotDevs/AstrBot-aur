@@ -450,7 +450,7 @@ run_astrbot() {
         UV_PYTHON_INSTALL_DIR="$UV_PYTHON_INSTALL_DIR" \
         ASTRBOT_SYSTEMD="$ASTRBOT_SYSTEMD" \
         ASTRBOT_DESKTOP_CLIENT="$ASTRBOT_DESKTOP_CLIENT" \
-        "$venv_astrbot" "$@"
+        "$venv_astrbot" run "$@"
 }
 
 # ─── Diagnostic / info ──────────────────────────────────────────────────────

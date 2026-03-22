@@ -144,7 +144,8 @@ cp)
 
 # ── rm ────────────────────────────────────────────────────────────────────────
 rm)
-    [ "${2:-}" = "-h" ] || [ "${2:-}" = "--help" ] && { echo "Usage: sudo astrbotctl rm <name>"; exit 0; }
+    [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ] && { echo "Usage: sudo astrbotctl rm <name>"; exit 0; }
+    instance="${1:-}"
     require_root
     require_instance
 
@@ -185,7 +186,8 @@ rm)
 
 # ── reset ─────────────────────────────────────────────────────────────────────
 reset)
-    [ "${2:-}" = "-h" ] || [ "${2:-}" = "--help" ] && { echo "Usage: sudo astrbotctl reset <name>"; exit 0; }
+    [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ] && { echo "Usage: sudo astrbotctl reset <name>"; exit 0; }
+    instance="${1:-}"
     require_root
     require_instance
 
@@ -199,7 +201,8 @@ reset)
 
 # ── certbot ───────────────────────────────────────────────────────────────────
 certbot)
-    [ "${2:-}" = "-h" ] || [ "${2:-}" = "--help" ] && { echo "Usage: sudo astrbotctl certbot <name>"; exit 0; }
+    [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ] && { echo "Usage: sudo astrbotctl certbot <name>"; exit 0; }
+    instance="${1:-}"
     require_root
     require_instance
 
@@ -284,13 +287,13 @@ run)
 
     echo ">>> Starting AstrBot instance: $instance"
 
-    shift 2
     run_astrbot "$@"
     ;;
 
 # ── paths ─────────────────────────────────────────────────────────────────────
 paths)
-    [ "${2:-}" = "-h" ] || [ "${2:-}" = "--help" ] && { echo "Usage: astrbotctl paths <name>"; exit 0; }
+    [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ] && { echo "Usage: astrbotctl paths <name>"; exit 0; }
+    instance="${1:-}"
     require_instance
     load_instance_config
     print_paths
@@ -298,7 +301,8 @@ paths)
 
 # ── start / stop / restart / enable / disable / status ───────────────────────
 start|stop|restart|enable|disable|status)
-    [ "${2:-}" = "-h" ] || [ "${2:-}" = "--help" ] && { echo "Usage: astrbotctl $cmd <name>"; exit 0; }
+    [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ] && { echo "Usage: astrbotctl $cmd <name>"; exit 0; }
+    instance="${1:-}"
     require_instance
     systemctl "$cmd" "astrbot@$instance"
     ;;
