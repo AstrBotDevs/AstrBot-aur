@@ -1,0 +1,453 @@
+# astrbotctl - shared functions library
+# Source this file: . "$(dirname "$0")/astrbotctl.functions"
+
+# ─── Constants (can be overridden before sourcing) ────────────────────────────
+SYSTEM_ROOT="${SYSTEM_ROOT:-/var/lib/astrbot}"
+CONFIG_DIR="${CONFIG_DIR:-/etc/astrbot}"
+APP_DIR="${APP_DIR:-/opt/astrbot}"
+CACHE_DIR="${CACHE_DIR:-/var/cache/astrbot}"
+CERTBOT_INSTANCE_CERTS_DIR="${CERTBOT_INSTANCE_CERTS_DIR:-/etc/astrbot/certs}"
+UPSTREAM_URL="${UPSTREAM_URL:-https://github.com/AstrBotDevs/AstrBot.git}"
+UPSTREAM_BRANCH="${UPSTREAM_BRANCH:-dev}"
+
+# ─── Path helpers ─────────────────────────────────────────────────────────────
+
+conf_file() {
+    echo "$CONFIG_DIR/${instance?instance not set}.conf"
+}
+
+venv_dir() {
+    echo "$CACHE_DIR/venv-${instance?instance not set}"
+}
+
+certbot_instance_cert_dir() {
+    echo "$CERTBOT_INSTANCE_CERTS_DIR/${instance?instance not set}"
+}
+
+certbot_hook_path() {
+    echo "/etc/letsencrypt/renewal-hooks/deploy/astrbot-${instance?instance not set}.sh"
+}
+
+# ─── Guards ──────────────────────────────────────────────────────────────────
+
+require_root() {
+    [ "$(id -u)" -eq 0 ] && return 0
+    echo "❌ Error: This command requires root privileges (sudo)." >&2
+    exit 1
+}
+
+require_instance() {
+    if [ -z "${instance:-}" ]; then
+        echo "Usage: astrbotctl <command> <instance_name>" >&2
+        exit 1
+    fi
+}
+
+# ─── Config helpers ──────────────────────────────────────────────────────────
+
+# Upsert (insert or update) a key=value pair in a shell config file.
+# Quotes the value, escapes slashes and ampersands.
+upsert_conf_var() {
+    local conf_path="$1" key="$2" value="$3"
+    local escaped_value
+    escaped_value=$(printf '%s' "$value" | sed 's/[\/&]/\\&/g')
+
+    if grep -q "^${key}=" "$conf_path" 2>/dev/null; then
+        sed -i "s/^${key}=.*/${key}=\"${escaped_value}\"/" "$conf_path"
+    else
+        printf '%s="%s"\n' "$key" "$value" >>"$conf_path"
+    fi
+}
+
+# Load instance config file, exporting all ASTRBOT_* variables.
+load_instance_config() {
+    local conf_file
+    conf_file="$(conf_file)"
+    ASTRBOT_ROOT="$SYSTEM_ROOT/$instance"
+    ASTRBOT_HOME="$ASTRBOT_ROOT/home"
+
+    [ ! -f "$conf_file" ] && return 0
+    set -a
+    # shellcheck disable=SC1090
+    . "$conf_file"
+    set +a
+}
+
+# ─── Port allocation ─────────────────────────────────────────────────────────
+
+# Find a free port starting from $1 (default 3000).
+# Checks both assigned ports in config files and currently listening ports.
+find_free_port() {
+    local start_port="${1:-3000}" p port_used
+
+    # Collect used ports from config files.  Using find avoids zsh glob issues.
+    local used_line
+    used_line=$(find "$CONFIG_DIR" -maxdepth 1 -name '*.conf' -type f 2>/dev/null \
+        -exec grep -h '^ASTRBOT_PORT=' {} + 2>/dev/null \
+        | cut -d= -f2 | tr '\n' ' ')
+
+    # Collect currently listening ports.
+    local active_line
+    active_line=$(ss -lntH 2>/dev/null | awk '{print $4}' | grep -oE '[0-9]+$' | sort -u | tr '\n' ' ')
+
+    ASTRBOT_PORT=$start_port
+    while :; do
+        # Use awk for portable word-splitting and matching in both bash and zsh.
+        port_used=$(echo "$used_line $active_line" \
+            | awk '{for(i=1;i<=NF;i++) if($i==p) found=1} END{print found?1:0}' p="$ASTRBOT_PORT")
+        [ "$port_used" -eq 0 ] && break
+        ASTRBOT_PORT=$((ASTRBOT_PORT + 1))
+    done
+}
+
+# ─── Runtime environment ─────────────────────────────────────────────────────
+
+# Set up XDG and uv environment variables for an instance.
+# Call this before running any astrbot command in a subprocess.
+setup_runtime_env() {
+    runtime_root="${ASTRBOT_HOME:-$SYSTEM_ROOT/$instance/home}"
+    runtime_cache="$runtime_root/.cache"
+    runtime_config="$runtime_root/.config"
+    runtime_data="$runtime_root/.local/share"
+    runtime_state="$runtime_root/.local/state"
+
+    export HOME="$runtime_root"
+    export ASTRBOT_ROOT="${ASTRBOT_ROOT:-$SYSTEM_ROOT/$instance}"
+    export XDG_CACHE_HOME="$runtime_cache"
+    export XDG_CONFIG_HOME="$runtime_config"
+    export XDG_DATA_HOME="$runtime_data"
+    export XDG_STATE_HOME="$runtime_state"
+    export UV_CACHE_DIR="$CACHE_DIR/uv"
+    export UV_PROJECT_ENVIRONMENT="$CACHE_DIR/venv-$instance"
+    export UV_PYTHON_INSTALL_DIR="$CACHE_DIR/python"
+    export ASTRBOT_SYSTEMD=1
+    export ASTRBOT_DESKTOP_CLIENT=0
+
+    generate_env_file
+}
+
+# Generate .env file for this instance.
+generate_env_file() {
+    local env_file="$ASTRBOT_ROOT/data/.env"
+    mkdir -p "$(dirname "$env_file")"
+
+    cat >"$env_file" <<EOF
+HOME=$HOME
+XDG_CACHE_HOME=$XDG_CACHE_HOME
+XDG_CONFIG_HOME=$XDG_CONFIG_HOME
+XDG_DATA_HOME=$XDG_DATA_HOME
+XDG_STATE_HOME=$XDG_STATE_HOME
+UV_CACHE_DIR=$UV_CACHE_DIR
+UV_PROJECT_ENVIRONMENT=$UV_PROJECT_ENVIRONMENT
+UV_PYTHON_INSTALL_DIR=$UV_PYTHON_INSTALL_DIR
+VIRTUAL_ENV=$UV_PROJECT_ENVIRONMENT
+PATH=$UV_PROJECT_ENVIRONMENT/bin:$PATH
+ASTRBOT_SYSTEMD=$ASTRBOT_SYSTEMD
+ASTRBOT_DESKTOP_CLIENT=$ASTRBOT_DESKTOP_CLIENT
+ASTRBOT_ROOT=$ASTRBOT_ROOT
+EOF
+
+    local opt_vars="ASTRBOT_HOST ASTRBOT_PORT ASTRBOT_DASHBOARD_ENABLE
+        ASTRBOT_LOG_LEVEL ASTRBOT_RELOAD ASTRBOT_DISABLE_METRICS
+        ASTRBOT_SSL_ENABLE ASTRBOT_SSL_CERT ASTRBOT_SSL_KEY ASTRBOT_SSL_CA_CERTS
+        http_proxy https_proxy no_proxy"
+    for var in $opt_vars; do
+        local val
+        val=$(eval "printf '%s' \"\${$var:-}\"")
+        [ -n "$val" ] && echo "$var=$val"
+    done >>"$env_file"
+}
+
+# Create all required runtime directories under ASTRBOT_ROOT.
+ensure_runtime_dirs() {
+    mkdir -p \
+        "$HOME" \
+        "$XDG_CONFIG_HOME" \
+        "$XDG_DATA_HOME" \
+        "$XDG_STATE_HOME" \
+        "$ASTRBOT_ROOT/data" \
+        "$ASTRBOT_ROOT/data/config" \
+        "$ASTRBOT_ROOT/data/plugins" \
+        "$ASTRBOT_ROOT/data/temp" \
+        "$ASTRBOT_ROOT/data/skills" \
+        "$ASTRBOT_ROOT/data/site-packages" \
+        "$ASTRBOT_ROOT/data/knowledge_base" \
+        "$ASTRBOT_ROOT/data/backups" \
+        "$ASTRBOT_ROOT/data/t2i_templates" \
+        "$ASTRBOT_ROOT/data/webchat"
+}
+
+# ─── Privilege dropping ───────────────────────────────────────────────────────
+
+# Run a command as the astrbot user with .env sourced.
+# Handles recursive privilege-dropping prevention via ASTRBOT_PRIVDROP_DONE.
+_runuser_with_env() {
+    local env_file="$1" runtime_root="$2"
+    shift 2
+
+    if [ "$(id -u)" -eq 0 ] && [ -z "$ASTRBOT_PRIVDROP_DONE" ] && id astrbot >/dev/null 2>&1; then
+        export ASTRBOT_PRIVDROP_DONE=1
+        runuser -u astrbot -- env \
+            ASTRBOT_PRIVDROP_DONE="$ASTRBOT_PRIVDROP_DONE" \
+            sh -c 'set -a && . "$1" && set +a && ensure_runtime_dirs && cd "$2" && exec "${@:3}"' \
+            sh "$env_file" "$runtime_root" "$@"
+    else
+        (
+            set -a && . "$env_file" && set +a
+            ensure_runtime_dirs && cd "$runtime_root" && exec "$@"
+        )
+    fi
+}
+
+# Run an astrbot command (from the shared venv) with full runtime env.
+run_astrbot_env_cmd() {
+    setup_runtime_env
+    _runuser_with_env "$ASTRBOT_ROOT/data/.env" "$runtime_root" "$@"
+}
+
+# Ensure the shared venv is present and synced with the app.
+ensure_instance_env_synced() {
+    setup_runtime_env
+
+    if [ ! -d "$UV_PROJECT_ENVIRONMENT" ]; then
+        echo ">>> Creating virtual environment for instance: $instance"
+        run_astrbot_env_cmd uv venv "$UV_PROJECT_ENVIRONMENT" --python 3.12
+    fi
+
+    echo ">>> Syncing Python environment for instance: $instance"
+    run_astrbot_env_cmd env \
+        VIRTUAL_ENV="$UV_PROJECT_ENVIRONMENT" \
+        PATH="$UV_PROJECT_ENVIRONMENT/bin:$PATH" \
+        uv pip install "$APP_DIR"
+}
+
+# ─── Config rendering ────────────────────────────────────────────────────────
+
+# Render /etc/astrbot/tmpl.conf (or $SCRIPT_DIR/tmpl.conf) into an instance config.
+# Handles port auto-assignment automatically.
+render_config_from_template() {
+    local tmpl_file template_file conf_file
+
+    tmpl_file="/etc/astrbot/tmpl.conf"
+    if [ ! -f "$tmpl_file" ]; then
+        # Try script-relative path (for dev/test environments)
+        if [ -f "${SCRIPT_DIR:-}/tmpl.conf" ]; then
+            tmpl_file="${SCRIPT_DIR}/tmpl.conf"
+        else
+            echo "❌ Error: Config template not found (looked in $APP_DIR and script paths)." >&2
+            return 1
+        fi
+    fi
+
+    conf_file="$(conf_file)"
+    load_instance_config
+
+    INSTANCE_NAME="$instance"
+    unset ASTRBOT_HOST ASTRBOT_PORT
+    ASTRBOT_ROOT="${ASTRBOT_ROOT:-$SYSTEM_ROOT/$instance}"
+    ASTRBOT_HOST="0.0.0.0"
+    find_free_port 3000
+
+    local tmp_conf
+    tmp_conf="$(mktemp /tmp/astrbot.conf.XXXXXX)"
+    trap 'rm -f "$tmp_conf"' EXIT
+
+    export INSTANCE_NAME ASTRBOT_HOST ASTRBOT_PORT ASTRBOT_ROOT
+    envsubst <"$tmpl_file" >"$tmp_conf"
+
+    install -Dm644 "$tmp_conf" "$conf_file"
+    chmod 644 "$conf_file" 2>/dev/null || true
+
+    echo "✅ Config reset to template: $conf_file"
+    echo "   (ASTRBOT_PORT=$ASTRBOT_PORT, ASTRBOT_HOST=$ASTRBOT_HOST)"
+    return 0
+}
+
+# ─── Instance discovery ──────────────────────────────────────────────────────
+
+# Print one instance name per line from CONFIG_DIR/*.conf (only those with data dirs).
+# Uses process substitution to avoid the subshell-pipe issue where while-loop
+# output doesn't reach the final sort when using a traditional pipeline.
+iter_instances() {
+    [ ! -d "$CONFIG_DIR" ] && return 0
+    local name
+    while IFS= read -r conf; do
+        [ -f "$conf" ] || continue
+        name=$(basename "$conf" .conf)
+        [ -d "$SYSTEM_ROOT/$name" ] && printf '%s\n' "$name"
+    done < <(find "$CONFIG_DIR" -maxdepth 1 -name '*.conf' -type f 2>/dev/null) \
+    | sort -u
+}
+
+# ─── Certbot helpers ─────────────────────────────────────────────────────────
+
+# Sync /etc/letsencrypt/live/$cert_name/* → $CERTBOT_INSTANCE_CERTS_DIR/$instance/
+sync_certbot_cert_for_instance() {
+    local cert_name="$1"
+    # NOTE: inline the dest path to avoid zsh local-scope issues with
+    # command substitutions that reference other local vars.
+    local live_dir="/etc/letsencrypt/live/$cert_name"
+    local src_cert="$live_dir/fullchain.pem"
+    local src_key="$live_dir/privkey.pem"
+    local dest_dir="$CERTBOT_INSTANCE_CERTS_DIR/${instance}"
+
+    [ -f "$src_cert" ] || { echo "❌ Error: Certificate file not found: $src_cert" >&2; return 1; }
+    [ -f "$src_key" ]  || { echo "❌ Error: Private key file not found: $src_key" >&2;     return 1; }
+
+    # Determine group flag (skip if 'astrbot' group doesn't exist in this env)
+    local group_g=""
+    getent group astrbot >/dev/null 2>&1 && group_g="-g astrbot"
+
+    install -d -m750 -o root $group_g "$dest_dir"
+    install -m640 -o root $group_g "$src_cert" "$dest_dir/fullchain.pem"
+    install -m640 -o root $group_g "$src_key"  "$dest_dir/privkey.pem"
+}
+
+# Write the certbot deploy hook that triggers __certbot-deploy on renewal.
+install_certbot_deploy_hook() {
+    local cert_name="$1"
+    local hook_path
+    hook_path="$(certbot_hook_path)"
+    local group_g=""
+    getent group astrbot >/dev/null 2>&1 && group_g="-g astrbot"
+
+    install -d -m755 $group_g /etc/letsencrypt/renewal-hooks/deploy
+    cat >"$hook_path" <<EOF
+#!/bin/sh
+set -e
+/usr/bin/astrbotctl __certbot-deploy "${instance}" "${cert_name}"
+EOF
+    chmod 755 "$hook_path"
+}
+
+# Enable the system certbot renewal timer if available.
+enable_certbot_renew_timer() {
+    if systemctl list-unit-files certbot-renew.timer >/dev/null 2>&1; then
+        systemctl enable --now certbot-renew.timer && return 0
+    fi
+    if systemctl list-unit-files certbot.timer >/dev/null 2>&1; then
+        systemctl enable --now certbot.timer && return 0
+    fi
+    echo "⚠️  Warning: No certbot renewal timer unit found. Configure renewal manually." >&2
+    return 1
+}
+
+# ─── Git helpers ─────────────────────────────────────────────────────────────
+
+ensure_app_git_repo() {
+    local mirror="$CACHE_DIR/astrbot-git"
+    if [ ! -d "$mirror" ]; then
+        echo ">>> Creating local git mirror..."
+        install -d -m755 "$mirror"
+        git clone --bare --mirror "$UPSTREAM_URL" "$mirror"
+    fi
+    git -C "$mirror" fetch --prune origin
+}
+
+update_app_git_checkout() {
+    local mirror="$CACHE_DIR/astrbot-git"
+    [ ! -d "$mirror" ] && ensure_app_git_repo
+    echo ">>> Syncing to latest AstrBot..."
+    git -C "$mirror" fetch --prune origin
+    rm -rf "$APP_DIR"
+    git clone --depth=500 "file://$mirror" "$APP_DIR"
+}
+
+# ─── Core run logic ──────────────────────────────────────────────────────────
+
+# The main run entry point (called by systemd service and `astrbotctl run`).
+run_astrbot() {
+    setup_runtime_env
+
+    _runuser_with_env "$ASTRBOT_ROOT/data/.env" "$runtime_root" :
+
+    local venv_python="$UV_PROJECT_ENVIRONMENT/bin/python"
+    local venv_astrbot="$UV_PROJECT_ENVIRONMENT/bin/astrbot"
+
+    # Rebuild the venv if it is missing or incomplete.
+    if [ ! -x "$venv_python" ] || [ ! -x "$venv_astrbot" ]; then
+        echo ">>> Initializing virtual environment..."
+        [ -d "$UV_PROJECT_ENVIRONMENT" ] && [ ! -x "$venv_python" ] && rm -rf "$UV_PROJECT_ENVIRONMENT"
+        _runuser_with_env "$ASTRBOT_ROOT/data/.env" "$runtime_root" \
+            uv venv "$UV_PROJECT_ENVIRONMENT" --python 3.12
+        _runuser_with_env "$ASTRBOT_ROOT/data/.env" "$runtime_root" \
+            uv pip install "$APP_DIR"
+    fi
+
+    [ -d "$ASTRBOT_ROOT" ] && cd "$ASTRBOT_ROOT"
+    exec "$venv_astrbot" "$@"
+}
+
+# ─── Diagnostic / info ──────────────────────────────────────────────────────
+
+print_help() {
+    cat <<'HELP'
+AstrBot Control Tool
+
+Usage:
+  sudo astrbotctl init [-f backup.zip] <name>      # Create a new instance
+  sudo astrbotctl cp <src> <dst>                   # Copy an instance
+  sudo astrbotctl rm <name>                        # Remove an instance
+  sudo astrbotctl reset <name>                     # Regenerate config from template
+  sudo astrbotctl certbot <name>                   # Issue/renew HTTPS certs
+  astrbotctl start <name>                          # Start via systemd
+  astrbotctl stop <name>                           # Stop via systemd
+  astrbotctl status <name>                         # Check status
+  astrbotctl list                                  # List instances
+  astrbotctl paths <name>                          # Print instance-related paths
+  astrbotctl admin [options] <name>                # Change dashboard password
+  astrbotctl export [options] <name>               # Export instance backup
+  astrbotctl import [options] <name> <backup_file> # Import instance backup
+  sudo astrbotctl git pull [--sync] [instance|--all]            # Pull latest app source
+  sudo astrbotctl git pull --rebuild-venv [instance|--all]     # Pull and rebuild venv(s)
+
+Init options:
+  -f, --backup <file>  Initialize the instance from a backup archive
+
+admin options:
+  -u, --username <name>  Update dashboard username
+  -p, --password <pass>  Set dashboard password non-interactively
+
+Export options:
+  -o, --output <dir>             Output directory
+  -S, --gpg-sign                 Sign backup with GPG
+  -E, --gpg-encrypt <recipient> Encrypt for GPG recipient
+  -C, --gpg-symmetric            Symmetric encryption
+  -d, --digest <algo>            Generate digest
+
+Import options:
+  -y, --yes  Skip confirmation prompts
+
+Debugging:
+  astrbotctl run <name> [astrbot-run-args]  # Run in foreground
+  astrbotctl cli <name> [args]               # Run astrbot command directly
+HELP
+}
+
+print_paths() {
+    local root="${ASTRBOT_ROOT:-$SYSTEM_ROOT/$instance}"
+    local home_dir="${ASTRBOT_HOME:-$root/home}"
+    local conf_file uv_cache_path log_dir_value
+
+    conf_file="$(conf_file)"
+    uv_cache_path="$CACHE_DIR/uv"
+    log_dir_value="${LOG_DIR:-$root/logs}"
+
+    echo "# Instance: $instance"
+    echo "INSTANCE_NAME=$instance"
+    echo "SYSTEM_ROOT=$SYSTEM_ROOT"
+    echo "ASTRBOT_ROOT=$root"
+    echo "HOME_DIR=$home_dir"
+    echo "WORKING_DIR=$home_dir"
+    echo "CONFIG_FILE=$conf_file"
+    echo "VENV_DIR=$(venv_dir)"
+    echo "CACHE_DIR=$CACHE_DIR"
+    echo "UV_CACHE_DIR=$uv_cache_path"
+    echo "PYTHON_INSTALL_DIR=$CACHE_DIR/python"
+    echo "LOG_DIR=$log_dir_value"
+    echo "APP_DIR=$APP_DIR"
+    echo "SYSTEMD_UNIT=astrbot@${instance}.service"
+    echo "ASTRBOT_HOST=${ASTRBOT_HOST:-}"
+    echo "ASTRBOT_PORT=${ASTRBOT_PORT:-}"
+    [ -n "${ASTRBOT_DASHBOARD_ENABLE:-}" ] && echo "ASTRBOT_DASHBOARD_ENABLE=$ASTRBOT_DASHBOARD_ENABLE"
+}
