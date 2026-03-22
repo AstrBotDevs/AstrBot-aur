@@ -330,11 +330,14 @@ admin)
     load_instance_config
     [ ! -d "$ASTRBOT_ROOT" ] && { echo "❌ Error: Instance directory $ASTRBOT_ROOT does not exist." >&2; exit 1; }
 
+    # conf is a top-level astrbot subcommand, not a subcommand of 'run'.
+    # We bypass run_astrbot and invoke astrbot directly with the instance venv.
+    cd "$ASTRBOT_ROOT" || exit
     if [ -n "$username" ]; then
-        run_astrbot run conf set dashboard.username "$username"
+        "$UV_PROJECT_ENVIRONMENT/bin/astrbot" conf set dashboard.username "$username"
     fi
     if [ -n "$password" ]; then
-        run_astrbot run conf set dashboard.password "$password"
+        "$UV_PROJECT_ENVIRONMENT/bin/astrbot" conf set dashboard.password "$password"
     fi
     if [ -z "$username" ] && [ -z "$password" ]; then
         echo "❌ Error: Must provide at least one of -u/--username or -p/--password" >&2
