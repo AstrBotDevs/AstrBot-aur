@@ -132,7 +132,7 @@ setup_runtime_env() {
 
 # Generate .env file for this instance.
 generate_env_file() {
-    local env_file="$ASTRBOT_ROOT/data/.env"
+    local env_file="$ASTRBOT_ROOT/.env"
     mkdir -p "$(dirname "$env_file")"
 
     cat >"$env_file" <<EOF
