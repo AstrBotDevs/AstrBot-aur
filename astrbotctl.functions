@@ -275,7 +275,7 @@ ssl_enable = sys.argv[4].lower() in ('true', '1', 'yes')
 cert_file = sys.argv[5]
 key_file = sys.argv[6]
 log_level = sys.argv[7]
-with open(path, 'r') as f:
+with open(path, 'r', encoding='utf-8-sig') as f:
     data = json.load(f)
 data.setdefault('dashboard', {})['port'] = port
 data['dashboard']['host'] = host
@@ -283,7 +283,7 @@ data['dashboard'].setdefault('ssl', {})['enable'] = ssl_enable
 data['dashboard']['ssl']['cert_file'] = cert_file
 data['dashboard']['ssl']['key_file'] = key_file
 data['log_level'] = log_level
-with open(path, 'w') as f:
+with open(path, 'w', encoding='utf-8') as f:
     json.dump(data, f, indent=2, ensure_ascii=False)
 PYEOF
     fi
