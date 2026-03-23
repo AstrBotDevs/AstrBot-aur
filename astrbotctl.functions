@@ -245,11 +245,9 @@ sync_cmd_config() {
     local cmd_config="${ASTRBOT_ROOT}/data/cmd_config.json"
     [ ! -f "$cmd_config" ] && return 0
 
-    # Also pull ASTRBOT_DASHBOARD_ENABLE from the conf file
-    # conf_file() needs $instance; use path directly to avoid subshell scope issue
-    local _conf="${CONFIG_DIR}/${instance}.conf"
-    local dashboard_enable
-    dashboard_enable="$(grep -m1 '^ASTRBOT_DASHBOARD_ENABLE=' "$_conf" 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "true")"
+    # Use the already-loaded shell variable ASTRBOT_DASHBOARD_ENABLE (set by
+    # load_instance_config from the conf file). Fallback to true if not set.
+    local dashboard_enable="${ASTRBOT_DASHBOARD_ENABLE:-true}"
 
     # Use jq if available, otherwise use Python for reliable JSON editing
     if command -v jq >/dev/null 2>&1; then
