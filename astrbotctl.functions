@@ -633,6 +633,10 @@ run_astrbot() {
     fi
 
     cd "$ASTRBOT_ROOT" || exit
+
+    # Sync env vars from conf file to cmd_config.json so they take effect at runtime
+    sync_cmd_config
+
     # If no arguments provided, default to running the server 'run' subcommand.
     # Otherwise, pass through the provided arguments as top-level astrbot subcommands.
     local _cmd
