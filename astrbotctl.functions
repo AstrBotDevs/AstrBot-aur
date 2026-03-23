@@ -603,7 +603,7 @@ Usage:
   astrbotctl start <name>                          # Start via systemd
   astrbotctl stop <name>                           # Stop via systemd
   astrbotctl status <name>                         # Check status
-  astrbotctl list                                  # List instances
+  astrbotctl ls                                    # List instances
   astrbotctl paths <name>                          # Print instance-related paths
   astrbotctl admin [options] <name>                # Change dashboard password
   astrbotctl export [options] <name>               # Export instance backup

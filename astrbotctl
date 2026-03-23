@@ -407,8 +407,8 @@ import)
     run_astrbot bk import ${yes:+-y} "$backup_file"
     ;;
 
-# ── list ──────────────────────────────────────────────────────────────────────
-list)
+# ── ls ────────────────────────────────────────────────────────────────────────
+ls)
     echo "=== AstrBot Instances ==="
     instances=$(iter_instances)
     if [ -n "$instances" ]; then
