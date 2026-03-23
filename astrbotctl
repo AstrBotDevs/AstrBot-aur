@@ -542,34 +542,18 @@ exit 0 ;;
     take_git_snapshot
     SNAP_TAG="$_SNAP_TAG"
 
-    # ── Step 2: Mount overlay snapshot ───────────────────────────────────────
+    # ── Step 2: Pull AUR package (before overlay — /opt/astrbot must be writable) ──
 
     echo ""
-    echo "[2/7] Mounting overlayfs snapshot..."
-    if ! mount_overlay_snapshot; then
-        echo "❌ Overlay mount failed. Falling back to git snapshot only."
-        auto_rollback=0
+    echo "[2/7] Pulling AUR package..."
+    UPDATE_OK=0
+
+    # Clean up any stale overlay from previous failed run first
+    if is_overlay_mounted; then
+        echo ">>> Cleaning up stale overlay from previous run..."
+        commit_overlay_and_unmount
     fi
 
-    # ── Step 3: Fix broken dashboard symlink ─────────────────────────────────
-
-    echo ""
-    echo "[3/7] Fixing broken dashboard symlink in overlay..."
-    _fix_dashboard_symlink() {
-        local _dist_link="/opt/astrbot/astrbot/dashboard/dist"
-        if [ -L "$_dist_link" ] && [ ! -e "$_dist_link" ]; then
-            echo ">>> Removing broken dashboard dist symlink..."
-            rm -f "$_dist_link"
-            mkdir -p "$_dist_link"
-        fi
-    }
-    _fix_dashboard_symlink
-
-    # ── Step 4: Pull AUR package ─────────────────────────────────────────────
-
-    echo ""
-    echo "[4/7] Pulling AUR package..."
-    UPDATE_OK=0
     if command -v paru >/dev/null 2>&1; then
         if sudo -u lightjunction paru -Syu astrbot-git --noconfirm 2>&1; then
             UPDATE_OK=1
@@ -580,9 +564,32 @@ exit 0 ;;
         echo "⚠️  paru not found, skipping AUR package update."
     fi
 
-    # Also sync /opt/astrbot from mirror to get latest source
+    # Sync /opt/astrbot from mirror to get latest source (must be done before overlay mount)
     echo ">>> Syncing /opt/astrbot from git mirror..."
     update_app_git_checkout 2>/dev/null || true
+
+    # ── Step 3: Mount overlay snapshot ─────────────────────────────────────────
+
+    echo ""
+    echo "[3/7] Mounting overlayfs snapshot..."
+    if ! mount_overlay_snapshot; then
+        echo "❌ Overlay mount failed. Falling back to git snapshot only."
+        auto_rollback=0
+    fi
+
+    # ── Step 4: Fix broken dashboard symlink in overlay ──────────────────────
+
+    echo ""
+    echo "[4/7] Fixing broken dashboard symlink in overlay..."
+    _fix_dashboard_symlink() {
+        local _dist_link="/opt/astrbot/astrbot/dashboard/dist"
+        if [ -L "$_dist_link" ] && [ ! -e "$_dist_link" ]; then
+            echo ">>> Removing broken dashboard dist symlink..."
+            rm -f "$_dist_link"
+            mkdir -p "$_dist_link"
+        fi
+    }
+    _fix_dashboard_symlink
 
     # ── Step 5: Rebuild venv and restart instance ─────────────────────────────
 
