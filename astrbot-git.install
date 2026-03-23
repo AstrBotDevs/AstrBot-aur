@@ -34,6 +34,13 @@ _clone_app() {
     local mirror="/var/cache/astrbot/astrbot-git"
     local _stale=0
 
+    # Skip clone if overlayfs is mounted on /opt/astrbot (astrbotctl update is running)
+    if mount | grep -q ' /opt/astrbot '; then
+        echo ">>> Overlay mount detected on /opt/astrbot — skipping clone in pacman hook."
+        echo ">>> (astrbotctl update will handle the sync)"
+        return 0
+    fi
+
     # Remove stale /opt/astrbot so pacman never sees it as a tracked file conflict.
     # But only after confirming the new clone will succeed — don't leave /opt broken.
     if [ -d "/opt/astrbot" ]; then
