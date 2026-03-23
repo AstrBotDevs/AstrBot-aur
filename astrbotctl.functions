@@ -404,11 +404,35 @@ _ensure_app_dir() {
 
 update_app_git_checkout() {
     local mirror="$CACHE_DIR/astrbot-git"
-    [ ! -d "$mirror" ] && ensure_app_git_repo
+
+    # Recreate mirror if it's corrupted (e.g. overwritten with AUR repo clone)
+    if [ -d "$mirror" ]; then
+        if ! git -C "$mirror" rev-parse --verify "${UPSTREAM_BRANCH}" >/dev/null 2>&1; then
+            echo ">>> Mirror missing ${UPSTREAM_BRANCH} branch — rebuilding..."
+            rm -rf "$mirror"
+        fi
+    fi
+
+    if [ ! -d "$mirror" ]; then
+        echo ">>> Creating local git mirror..."
+        install -d -m755 "$mirror"
+        git clone --bare --mirror "$UPSTREAM_URL" "$mirror" || {
+            echo "❌ Error: Failed to create git mirror" >&2
+            return 1
+        }
+    fi
+
     echo ">>> Syncing to latest AstrBot..."
-    git -C "$mirror" fetch --prune origin
+    git -C "$mirror" fetch --prune origin || {
+        # Fallback: direct clone if mirror fetch fails
+        echo "⚠️  Mirror fetch failed, cloning directly from GitHub..."
+        rm -rf "$APP_DIR"
+        git clone -b "$UPSTREAM_BRANCH" --depth=500 "$UPSTREAM_URL" "$APP_DIR" && return 0
+        return 1
+    }
+
     rm -rf "$APP_DIR"
-    git clone --depth=500 "file://$mirror" "$APP_DIR"
+    git clone -b "$UPSTREAM_BRANCH" --depth=500 "file://$mirror" "$APP_DIR"
 }
 
 # ─── Overlay snapshot / rollback ────────────────────────────────────────────
