@@ -245,6 +245,10 @@ sync_cmd_config() {
     local cmd_config="${ASTRBOT_ROOT}/data/cmd_config.json"
     [ ! -f "$cmd_config" ] && return 0
 
+    # Also pull ASTRBOT_DASHBOARD_ENABLE from the conf file environment
+    local dashboard_enable
+    dashboard_enable="$(grep -m1 '^ASTRBOT_DASHBOARD_ENABLE=' "$conf_file" 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "true")"
+
     # Use jq if available, otherwise use Python for reliable JSON editing
     if command -v jq >/dev/null 2>&1; then
         jq \
@@ -254,8 +258,10 @@ sync_cmd_config() {
             --arg cert_file "$ASTRBOT_SSL_CERT" \
             --arg key_file "$ASTRBOT_SSL_KEY" \
             --arg log_level "$ASTRBOT_LOG_LEVEL" \
+            --argjson dashboard_enable "$([[ "${dashboard_enable,,}" == @(true|1|yes) ]] && echo 'true' || echo 'false')" \
             '.dashboard.port = ($port | tonumber)
              | .dashboard.host = $host
+             | .dashboard.enable = $dashboard_enable
              | .dashboard.ssl.enable = ($ssl_enable == "true")
              | .dashboard.ssl.cert_file = $cert_file
              | .dashboard.ssl.key_file = $key_file
@@ -266,7 +272,7 @@ sync_cmd_config() {
         # Use Python for reliable JSON manipulation (no extra deps needed)
         python3 - "$cmd_config" "$ASTRBOT_PORT" "$ASTRBOT_HOST" \
             "$ASTRBOT_SSL_ENABLE" "$ASTRBOT_SSL_CERT" "$ASTRBOT_SSL_KEY" \
-            "$ASTRBOT_LOG_LEVEL" <<'PYEOF'
+            "$ASTRBOT_LOG_LEVEL" "$dashboard_enable" <<'PYEOF'
 import json, sys
 path = sys.argv[1]
 port = int(sys.argv[2])
@@ -275,10 +281,12 @@ ssl_enable = sys.argv[4].lower() in ('true', '1', 'yes')
 cert_file = sys.argv[5]
 key_file = sys.argv[6]
 log_level = sys.argv[7]
+dashboard_enable = sys.argv[8].lower() in ('true', '1', 'yes')
 with open(path, 'r', encoding='utf-8-sig') as f:
     data = json.load(f)
 data.setdefault('dashboard', {})['port'] = port
 data['dashboard']['host'] = host
+data['dashboard']['enable'] = dashboard_enable
 data['dashboard'].setdefault('ssl', {})['enable'] = ssl_enable
 data['dashboard']['ssl']['cert_file'] = cert_file
 data['dashboard']['ssl']['key_file'] = key_file
