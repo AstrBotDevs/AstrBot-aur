@@ -318,7 +318,8 @@ render_config_from_template() {
     tmp_conf="$(mktemp /tmp/astrbot.conf.XXXXXX)"
     trap 'rm -f "$tmp_conf"' EXIT
 
-    export INSTANCE_NAME ASTRBOT_HOST ASTRBOT_PORT ASTRBOT_ROOT
+    export INSTANCE_NAME ASTRBOT_HOST ASTRBOT_PORT ASTRBOT_ROOT \
+        ASTRBOT_SSL_ENABLE ASTRBOT_SSL_CERT ASTRBOT_SSL_KEY ASTRBOT_SSL_CA_CERTS
     envsubst <"$tmpl_file" >"$tmp_conf"
 
     install -Dm644 "$tmp_conf" "$conf_file"
