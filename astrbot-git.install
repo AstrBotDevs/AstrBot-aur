@@ -77,18 +77,6 @@ _clone_app() {
         exit 1
     }
     echo ">>> /opt/astrbot ready ($(git -C /opt/astrbot describe --tags 2>/dev/null || git -C /opt/astrbot rev-parse --short HEAD))"
-
-    # Fix broken dashboard/dist symlink. The dev branch has dist as a broken
-    # symlink pointing to ../../dashboard/dist which doesn't exist in the clone.
-    # Remove it and create an empty dir so hatch builds don't fail.
-    local _dist_link="/opt/astrbot/astrbot/dashboard/dist"
-    if [ -L "$_dist_link" ]; then
-        if [ ! -e "$_dist_link" ]; then
-            echo ">>> Removing broken dashboard dist symlink..."
-            rm -f "$_dist_link"
-            mkdir -p "$_dist_link"
-        fi
-    fi
 }
 
 # ─── Hooks ─────────────────────────────────────────────────────────────────────
