@@ -196,7 +196,7 @@ _runuser_with_env() {
 
     if [ "$(id -u)" -eq 0 ] && [ -z "$ASTRBOT_PRIVDROP_DONE" ] && id astrbot >/dev/null 2>&1; then
         export ASTRBOT_PRIVDROP_DONE=1
-        export ASTRBOTCTL_FUNCS="${SCRIPT_DIR}/astrbotctl.functions"
+        export ASTRBOTCTL_FUNCS="/usr/local/lib/astrbotctl.functions"
         runuser -u astrbot -- env \
             ASTRBOT_PRIVDROP_DONE="$ASTRBOT_PRIVDROP_DONE" \
             ASTRBOTCTL_FUNCS="$ASTRBOTCTL_FUNCS" \
@@ -632,10 +632,10 @@ run_astrbot() {
     # Rebuild venv if missing or incomplete.
     if [ ! -x "$venv_python" ] || [ ! -x "$venv_astrbot" ]; then
         echo ">>> Initializing virtual environment..."
-        [ -d "$UV_PROJECT_ENVIRONMENT" ] && [ ! -x "$venv_python" ] \
-            && rm -rf "$UV_PROJECT_ENVIRONMENT"
+        # Use --clear so uv handles removal of an incomplete/broken venv
+        # (works even when the directory is a read-only systemd namespace mount)
         _runuser_with_env "$env_file" "$runtime_root" \
-            uv venv "$UV_PROJECT_ENVIRONMENT" --python 3.12
+            uv venv "$UV_PROJECT_ENVIRONMENT" --python 3.12 --clear
         _runuser_with_env "$env_file" "$runtime_root" \
             uv pip install "$APP_DIR"
     fi
