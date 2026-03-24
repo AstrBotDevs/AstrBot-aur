@@ -34,10 +34,13 @@ ProtectSystem=strict
 ProtectHome=read-only
 
 # AstrBot writes to: instance data dir, venv, uv cache, python install dir.
-ReadWritePaths=/var/lib/astrbot/%i
-ReadWritePaths=/var/cache/astrbot/venv-%i
-ReadWritePaths=/var/cache/astrbot/uv
-ReadWritePaths=/var/cache/astrbot/python
+# RuntimeDirectory= creates the directory in /run (tmpfs, always writable) and
+# bind-mounts it to the target. This works around ProtectSystem=strict making
+# the host filesystem appear read-only inside the namespace.
+RuntimeDirectory=astrbot-venv-%i
+RuntimeDirectory=astrbot-uv
+RuntimeDirectory=astrbot-python
+BindPaths=/var/lib/astrbot/%i
 
 [Install]
 WantedBy=multi-user.target
