@@ -127,7 +127,7 @@ setup_runtime_env() {
     export XDG_DATA_HOME="$runtime_data"
     export XDG_STATE_HOME="$runtime_state"
     export UV_CACHE_DIR="/tmp/astrbot-uv-$instance"
-    export UV_PROJECT_ENVIRONMENT="$CACHE_DIR/venv-$instance"
+    export UV_PROJECT_ENVIRONMENT="/tmp/astrbot-venv-$instance"
     export UV_PYTHON_INSTALL_DIR="$CACHE_DIR/python"
     export ASTRBOT_SYSTEMD=1
     export ASTRBOT_DESKTOP_CLIENT=0

@@ -33,13 +33,10 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only
-
-# AstrBot writes to: instance data dir, venv (via RuntimeDirectory=), python install dir.
-# RuntimeDirectory= creates the directory in /run (tmpfs) and bind-mounts it,
-# bypassing the ProtectSystem=strict read-only host filesystem restriction.
-RuntimeDirectory=astrbot-venv-%i
-RuntimeDirectory=astrbot-python
-BindPaths=/var/lib/astrbot/%i
+# NOTE: ReadWritePaths does not work with ProtectSystem=strict on this kernel/OS
+# configuration. As a workaround, UV_CACHE_DIR is set to /tmp in setup_runtime_env.
+ReadWritePaths=/var/lib/astrbot/%i
+ReadWritePaths=/var/cache/astrbot/python
 
 [Install]
 WantedBy=multi-user.target
