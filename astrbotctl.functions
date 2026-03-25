@@ -196,11 +196,9 @@ _runuser_with_env() {
 
     if [ "$(id -u)" -eq 0 ] && [ -z "$ASTRBOT_PRIVDROP_DONE" ] && id astrbot >/dev/null 2>&1; then
         export ASTRBOT_PRIVDROP_DONE=1
-        export ASTRBOTCTL_FUNCS="/usr/bin/astrbotctl.functions"
         runuser -u astrbot -- env \
             ASTRBOT_PRIVDROP_DONE="$ASTRBOT_PRIVDROP_DONE" \
-            ASTRBOTCTL_FUNCS="$ASTRBOTCTL_FUNCS" \
-            sh -c 'set -a && . "$1" && . "$ASTRBOTCTL_FUNCS" && set +a && ensure_runtime_dirs && cd "$2" && exec "${@:3}"' \
+            sh -c 'set -a && . "$1" && . /usr/bin/astrbotctl.functions && set +a && ensure_runtime_dirs && cd "$2" && exec "${@:3}"' \
             sh "$env_file" "$runtime_root" "$@"
     else
         (
