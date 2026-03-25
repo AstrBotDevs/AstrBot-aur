@@ -3,14 +3,14 @@ set -e
 
 # ─── Locate script and load shared functions ──────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd || printf '%s' ".")"
-# Try system-wide location first (needed so astrbot user can source it via runuser),
-# then fall back to the script's own directory.
-if [ -f "/usr/local/lib/astrbotctl.functions" ]; then
-    # shellcheck source=/usr/local/lib/astrbotctl.functions
-    . /usr/local/lib/astrbotctl.functions
-else
+# Source from the same directory as the script (for packaging), falling back
+# to /usr/bin for the shared functions file.
+if [ -f "${SCRIPT_DIR}/astrbotctl.functions" ]; then
     # shellcheck source=astrbotctl.functions
     . "${SCRIPT_DIR}/astrbotctl.functions"
+else
+    # shellcheck source=/usr/bin/astrbotctl.functions
+    . /usr/bin/astrbotctl.functions
 fi
 
 # ─── Entry point ──────────────────────────────────────────────────────────────
