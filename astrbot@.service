@@ -33,9 +33,11 @@ PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only
 
-# AstrBot writes to instance data dir (including .venv and .cache/uv).
-# BindPaths makes this writable inside the namespace despite ProtectSystem=strict.
+# AstrBot writes to: instance data dir, and /opt/astrbot for Rust extension builds.
+# BindPaths + ReadWritePaths make these writable inside the namespace.
 BindPaths=/var/lib/astrbot/%i
+ReadWritePaths=/opt/astrbot
+ReadWritePaths=/var/cache/astrbot/python
 
 [Install]
 WantedBy=multi-user.target
