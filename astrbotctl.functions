@@ -536,6 +536,7 @@ mount_overlay_snapshot() {
 
     mkdir -p "$upper" "$work"
     chmod 755 "$upper" "$work"
+    chown -R astrbot:astrbot "$upper"
 
     # Unmount if already mounted
     if mountpoint -q "$APP_DIR"; then
