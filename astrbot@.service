@@ -12,7 +12,7 @@ Group=astrbot
 # (called inside run_astrbot before the Python process starts).
 Environment="ASTRBOT_SYSTEMD=1"
 Environment="ASTRBOT_DESKTOP_CLIENT=0"
-Environment="UV_CACHE_DIR=/var/cache/astrbot/uv"
+# UV_CACHE_DIR is set dynamically in setup_runtime_env (per-instance under ASTRBOT_ROOT/.cache/uv).
 Environment="UV_PYTHON_INSTALL_DIR=/var/cache/astrbot/python"
 
 # Working directory: the instance root created by `astrbotctl init`.
@@ -33,13 +33,8 @@ PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only
 
-# AstrBot writes to: instance data dir, venv, uv cache, python install dir.
-# RuntimeDirectory= creates the directory in /run (tmpfs, always writable) and
-# bind-mounts it to the target. This works around ProtectSystem=strict making
-# the host filesystem appear read-only inside the namespace.
-RuntimeDirectory=astrbot-venv-%i
-RuntimeDirectory=astrbot-uv
-RuntimeDirectory=astrbot-python
+# AstrBot writes to instance data dir (including .venv and .cache/uv).
+# BindPaths makes this writable inside the namespace despite ProtectSystem=strict.
 BindPaths=/var/lib/astrbot/%i
 
 [Install]
