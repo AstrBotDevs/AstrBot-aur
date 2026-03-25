@@ -231,6 +231,8 @@ ensure_instance_env_synced() {
     run_astrbot_env_cmd env \
         VIRTUAL_ENV="$UV_PROJECT_ENVIRONMENT" \
         PATH="$UV_PROJECT_ENVIRONMENT/bin:$PATH" \
+        UV_NO_CONFIG=1 \
+        UV_PYTHON_INSTALL_DIR="$ASTRBOT_ROOT/.python" \
         uv pip install "$APP_DIR"
 }
 

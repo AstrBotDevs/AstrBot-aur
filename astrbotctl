@@ -591,21 +591,13 @@ exit 0 ;;
     # ── Step 4: Rebuild venv and restart instance ─────────────────────────────
 
     echo ""
-    echo "[4/7] Rebuilding venv and restarting instances..."
+    echo "[4/7] Restarting instances (overlay makes new code live)..."
     _update_instance() {
         local inst="$1"
         load_instance_config
         if [ ! -d "$ASTRBOT_ROOT" ]; then
             echo "⚠️  Instance $inst directory missing, skipping."
             return 0
-        fi
-
-        echo ">>> Rebuilding venv for: $inst"
-        rm -rf "$CACHE_DIR/venv-$inst"
-
-        if ! ensure_instance_env_synced 2>&1; then
-            echo "⚠️  Failed to sync environment for $inst"
-            return 1
         fi
 
         echo ">>> Stopping: $inst"
