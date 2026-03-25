@@ -569,6 +569,10 @@ exit 0 ;;
         exit 1
     fi
 
+    # Fix ownership so venv rebuild (step 4) can write as astrbot user.
+    # git clone above runs as root and creates root-owned files in upperdir.
+    chown -R astrbot:astrbot "$_OVERLAY_UPPER"
+
     # ── Step 3: Pull AUR package ─────────────────────────────────────────────
 
     echo ""
