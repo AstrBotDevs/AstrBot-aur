@@ -196,7 +196,7 @@ _runuser_with_env() {
 
     if [ "$(id -u)" -eq 0 ] && [ -z "$ASTRBOT_PRIVDROP_DONE" ] && id astrbot >/dev/null 2>&1; then
         export ASTRBOT_PRIVDROP_DONE=1
-        export ASTRBOTCTL_FUNCS="/usr/local/lib/astrbotctl.functions"
+        export ASTRBOTCTL_FUNCS="/usr/bin/astrbotctl.functions"
         runuser -u astrbot -- env \
             ASTRBOT_PRIVDROP_DONE="$ASTRBOT_PRIVDROP_DONE" \
             ASTRBOTCTL_FUNCS="$ASTRBOTCTL_FUNCS" \
