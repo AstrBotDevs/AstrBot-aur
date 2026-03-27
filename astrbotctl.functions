@@ -129,6 +129,8 @@ setup_runtime_env() {
     export UV_CACHE_DIR="$ASTRBOT_ROOT/.cache/uv"
     export UV_PROJECT_ENVIRONMENT="$ASTRBOT_ROOT/.venv"
     export UV_PYTHON_INSTALL_DIR="$CACHE_DIR/python"
+    export CARGO_HOME="$CACHE_DIR/cargo"
+    export RUSTUP_HOME="$CACHE_DIR/rustup"
     export ASTRBOT_SYSTEMD=1
     export ASTRBOT_DESKTOP_CLIENT=0
 
@@ -149,6 +151,8 @@ XDG_STATE_HOME=$XDG_STATE_HOME
 UV_CACHE_DIR=$UV_CACHE_DIR
 UV_PROJECT_ENVIRONMENT=$UV_PROJECT_ENVIRONMENT
 UV_PYTHON_INSTALL_DIR=$UV_PYTHON_INSTALL_DIR
+CARGO_HOME=$CARGO_HOME
+RUSTUP_HOME=$RUSTUP_HOME
 VIRTUAL_ENV=$UV_PROJECT_ENVIRONMENT
 PATH=$UV_PROJECT_ENVIRONMENT/bin:$PATH
 ASTRBOT_SYSTEMD=$ASTRBOT_SYSTEMD
@@ -233,6 +237,8 @@ ensure_instance_env_synced() {
         PATH="$UV_PROJECT_ENVIRONMENT/bin:$PATH" \
         UV_NO_CONFIG=1 \
         UV_PYTHON_INSTALL_DIR="$ASTRBOT_ROOT/.python" \
+        CARGO_HOME="$CACHE_DIR/cargo" \
+        RUSTUP_HOME="$CACHE_DIR/rustup" \
         uv pip install "$APP_DIR"
 }
 
@@ -638,7 +644,10 @@ run_astrbot() {
         _runuser_with_env "$env_file" "$runtime_root" \
             uv venv "$UV_PROJECT_ENVIRONMENT" --python 3.12 --clear
         _runuser_with_env "$env_file" "$runtime_root" \
-            uv pip install "$APP_DIR"
+            env \
+                CARGO_HOME="$CACHE_DIR/cargo" \
+                RUSTUP_HOME="$CACHE_DIR/rustup" \
+                uv pip install "$APP_DIR"
     fi
 
     cd "$ASTRBOT_ROOT" || exit

@@ -38,6 +38,8 @@ ProtectHome=read-only
 BindPaths=/var/lib/astrbot/%i
 ReadWritePaths=/opt/astrbot
 ReadWritePaths=/var/cache/astrbot/python
+ReadWritePaths=/var/cache/astrbot/cargo
+ReadWritePaths=/var/cache/astrbot/rustup
 
 [Install]
 WantedBy=multi-user.target
