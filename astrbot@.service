@@ -40,6 +40,7 @@ ReadWritePaths=/opt/astrbot
 ReadWritePaths=/var/cache/astrbot/python
 ReadWritePaths=/var/cache/astrbot/cargo
 ReadWritePaths=/var/cache/astrbot/rustup
+ReadWritePaths=/var/cache/astrbot/cargo_target
 
 [Install]
 WantedBy=multi-user.target

@@ -24,6 +24,7 @@ _ensure_environment() {
     install -dm755 -o astrbot -g astrbot /var/cache/astrbot/python
     install -dm755 -o astrbot -g astrbot /var/cache/astrbot/cargo
     install -dm755 -o astrbot -g astrbot /var/cache/astrbot/rustup
+    install -dm755 -o astrbot -g astrbot /var/cache/astrbot/cargo_target
     install -dm755 -o root    -g root    /etc/astrbot
 
     [ -d "/var/lib/astrbot" ] && chown -R astrbot:astrbot /var/lib/astrbot

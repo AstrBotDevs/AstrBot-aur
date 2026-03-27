@@ -131,6 +131,7 @@ setup_runtime_env() {
     export UV_PYTHON_INSTALL_DIR="$CACHE_DIR/python"
     export CARGO_HOME="$CACHE_DIR/cargo"
     export RUSTUP_HOME="$CACHE_DIR/rustup"
+    export CARGO_TARGET_DIR="$CACHE_DIR/cargo_target"
     export ASTRBOT_SYSTEMD=1
     export ASTRBOT_DESKTOP_CLIENT=0
 
@@ -153,6 +154,7 @@ UV_PROJECT_ENVIRONMENT=$UV_PROJECT_ENVIRONMENT
 UV_PYTHON_INSTALL_DIR=$UV_PYTHON_INSTALL_DIR
 CARGO_HOME=$CARGO_HOME
 RUSTUP_HOME=$RUSTUP_HOME
+CARGO_TARGET_DIR=$CARGO_TARGET_DIR
 VIRTUAL_ENV=$UV_PROJECT_ENVIRONMENT
 PATH=$UV_PROJECT_ENVIRONMENT/bin:$PATH
 ASTRBOT_SYSTEMD=$ASTRBOT_SYSTEMD
@@ -239,6 +241,7 @@ ensure_instance_env_synced() {
         UV_PYTHON_INSTALL_DIR="$ASTRBOT_ROOT/.python" \
         CARGO_HOME="$CACHE_DIR/cargo" \
         RUSTUP_HOME="$CACHE_DIR/rustup" \
+        CARGO_TARGET_DIR="$CACHE_DIR/cargo_target" \
         uv pip install "$APP_DIR"
 }
 
@@ -647,6 +650,7 @@ run_astrbot() {
             env \
                 CARGO_HOME="$CACHE_DIR/cargo" \
                 RUSTUP_HOME="$CACHE_DIR/rustup" \
+                CARGO_TARGET_DIR="$CACHE_DIR/cargo_target" \
                 uv pip install "$APP_DIR"
     fi
 
