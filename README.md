@@ -14,11 +14,21 @@ AstrBot is an Agentic IM Chatbot infrastructure. This AUR package (`astrbot-git`
 
 ### Installation
 
-Install from AUR:
+#### Arch Linux (via AUR)
 
 ```bash
 paru -S astrbot-git
 ```
+
+#### Other Distributions (Debian / Ubuntu / RHEL / Fedora / openSUSE)
+
+```bash
+git clone https://github.com/AstrBotDevs/astrbot-aur.git
+cd astrbot-aur
+./setup.sh
+```
+
+The `setup.sh` script auto-detects your distribution and installs required dependencies, creates the `astrbot` system user, sets up directories, clones the app to `/opt/astrbot`, and installs the systemd service. Run `./setup.sh help` for step-by-step options.
 
 ### Quick Start
 
@@ -204,11 +214,21 @@ AstrBot 是一个支持多模型、多平台的即时通讯机器人框架。本
 
 ### 安装
 
-从 AUR 安装:
+#### Arch Linux（通过 AUR）
 
 ```bash
 paru -S astrbot-git
 ```
+
+#### 其他发行版（Debian / Ubuntu / RHEL / Fedora / openSUSE）
+
+```bash
+git clone https://github.com/AstrBotDevs/astrbot-aur.git
+cd astrbot-aur
+./setup.sh
+```
+
+`setup.sh` 脚本会自动检测发行版，安装系统依赖、创建 `astrbot` 系统用户、创建目录、克隆应用到 `/opt/astrbot`、安装 systemd 服务。运行 `./setup.sh help` 查看分步安装选项。
 
 ### 快速开始
 
