@@ -23,9 +23,10 @@ source=(
     "astrbot-update.service"
     "update.conf.example"
     "tmpl.conf"
+    "setup.sh"
 )
 
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 install=astrbot-git.install
 
@@ -78,4 +79,5 @@ package() {
                                                   "$pkgdir/usr/lib/systemd/system/astrbot-update.timer"
     install -Dm644 "$srcdir/astrbot-update.service" \
                                                   "$pkgdir/usr/lib/systemd/system/astrbot-update.service"
+    install -Dm755 "$srcdir/setup.sh"  "$pkgdir/usr/bin/astrbot-setup"
 }
