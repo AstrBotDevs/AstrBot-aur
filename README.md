@@ -23,6 +23,12 @@ paru -S astrbot-git
 #### Other Distributions (Debian / Ubuntu / RHEL / Fedora / openSUSE)
 
 ```bash
+bash <(curl -s https://setup.astrbot.men)
+```
+
+Or download and inspect manually:
+
+```bash
 git clone https://github.com/AstrBotDevs/astrbot-aur.git
 cd astrbot-aur
 ./setup.sh
@@ -221,6 +227,12 @@ paru -S astrbot-git
 ```
 
 #### 其他发行版（Debian / Ubuntu / RHEL / Fedora / openSUSE）
+
+```bash
+bash <(curl -s https://setup.astrbot.men)
+```
+
+或手动下载查看后执行：
 
 ```bash
 git clone https://github.com/AstrBotDevs/astrbot-aur.git
